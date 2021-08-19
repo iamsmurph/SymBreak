@@ -31,7 +31,7 @@ class Alignment:
         plt.scatter(coordsTrue[:,0], coordsTrue[:,1], c = colorsTrue)
         plt.title("REFERENCE IMAGE")
 
-        figColor = plt.figure(2, figsize=(10,10))
+        figColor = plt.figure(2, figsize=(8,8))
         for i, (x,y) in enumerate(zip(X,Y)):
             plt.scatter(x, y, c = colorsPheno[i], picker=5)
 
@@ -128,7 +128,7 @@ class Alignment:
         return np.vstack(coordList), colList
 
     def _numOrgs(self, designCoords):
-        # get counts of organoids wrt y axis values
+        # get counts of organoids with y axis that have the same values
         OrgsCnts = Counter(designCoords[:,1])
         # sort y axis keys in ascending order
         OrgsCntsSorted = sorted(OrgsCnts.items())

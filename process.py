@@ -15,16 +15,11 @@ p = preprocessing.Alignment('scripting/')
 # get groups
 coordsInit, colInit, coordsPheno, colPheno = p.grouping(pattInit, pattEnd)
 # correct groups interactively
-print(coordsInit.shape)
-print(len(colInit))
-print(coordsPheno.shape)
-
 newColPheno = p.coloring(coordsInit, colInit, coordsPheno, colPheno)
-print(len(newColPheno))
 
 # save corrected coordinates and col#ors
-#resArrs = np.array([coordsInit[:,0], coordsInit[:,1], colInit, coordsPheno[:,0], coordsPheno[:,1], newColPheno])
-#cNames = ['xInit', 'yInit', 'colorInit', 'xPheno', 'yPheno', 'colorPheno']
+resArrs = np.array([coordsInit[:,0], coordsInit[:,1], colInit, coordsPheno[:,0], coordsPheno[:,1], newColPheno])
+cNames = ['xInit', 'yInit', 'colorInit', 'xPheno', 'yPheno', 'colorPheno']
 
-#df = pd.DataFrame(data = resArrs, columns = cNames)
-#df.to_csv('matchedDF.csv', index=False)
+df = pd.DataFrame(data = resArrs.T, columns = cNames)
+df.to_csv('matchedDF.csv', index=False)
