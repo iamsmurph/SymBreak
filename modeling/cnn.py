@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data.sampler import SubsetRandomSampler
 import torch.nn.functional as F
 import torchvision
 import matplotlib.pyplot as plt
@@ -13,31 +14,30 @@ import random
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 # default `log_dir` is "runs" - we'll be more specific here
-flag = "2000epochs90DegRotations"
+flag = "5000RandomSplitRotation"
 writer = SummaryWriter('runs/cnn/' + flag)
+
 
 class OrganoidCNNDataset(Dataset):
 
-    def __init__(self, transform=None, train=None):
-        df = np.loadtxt('scripting/dfLocalityReward.csv', delimiter=',', dtype=np.float32, skiprows=1)
-        X = df[:, 1:]
-        y = ((df[:, [0]] > df[:, 0].mean())*1).astype(np.float32)
-
-        if train == True:
-            self.n_samples = X[:-50].shape[0]
-
-            self.x_data = X[:-50].reshape(-1, 1, 41, 41)
-            self.y_data = y[:-50]
-        else:
-            self.n_samples = X[-50:].shape[0]
-
-            self.x_data = X[-50:].reshape(-1, 1, 41, 41)
-            self.y_data = y[-50:]
-
+    def __init__(self, transform = None):
+        
+        df = np.loadtxt('scripting/dfLocalityReward.csv', 
+                            delimiter=',', 
+                            dtype=np.float32, 
+                            skiprows=1)
+        
+        # separate dataframe and binarize targets
+        X = df[:, 1:].reshape(-1, 1, 41, 41)
+        y = ((df[:, [0]] > np.median(df[:, 0]))*1).astype(np.float32)
+        
+        self.n_samples = X.shape[0]
+        self.images = X
+        self.labels = y
         self.transform = transform
 
     def __getitem__(self, index):
-        sample = self.x_data[index], self.y_data[index]
+        sample = self.images[index], self.labels[index]
 
         if self.transform:
             sample = self.transform(sample)
@@ -64,23 +64,24 @@ class RandomRotation:
 class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 6, 6)
+        self.conv1 = nn.Conv2d(1, 8, 6)
+        self.conv2 = nn.Conv2d(8, 16, 6)
+        #self.conv3 = nn.Conv2d(4, 8, 3)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 6)
-        self.fc1 = nn.Linear(16 * 6 * 6, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 32)
-        self.fc4 = nn.Linear(32, hparam['output_size'])
+        self.fc1 = nn.Linear(16*6*6, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, 64)
+        self.fc4 = nn.Linear(64, hparam['output_size'])
 
     def forward(self, x):
-        # -> n, 1, 41, 41
-        x = self.pool(F.relu(self.conv1(x)))  # -> n, 6, 18, 18
-        x = self.pool(F.relu(self.conv2(x)))  # -> n, 16, 6, 6
-        x = x.view(-1, 16 * 6 * 6)            # -> n, 576
-        x = F.relu(self.fc1(x))               # -> n, 128
-        x = F.relu(self.fc2(x))               # -> n, 64
-        x = F.relu(self.fc3(x))               # -> n, 32
-        x = self.fc4(x)                       # -> n, 1
+        x = self.pool(F.relu(self.conv1(x))) 
+        x = self.pool(F.relu(self.conv2(x))) 
+        #x = self.pool(F.relu(self.conv3(x))) 
+        x = x.view(-1, 6*6*16)            
+        x = F.relu(self.fc1(x))              
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)              
         return x
 
 ######## INITIALIZATION ########
@@ -89,21 +90,48 @@ class ConvNet(nn.Module):
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters 
-hparam = {"output_size": 1, "num_epochs": 2000, "batch_size": 70, "lr": 0.0001}
+hparam = {"output_size": 1, "num_epochs": 5000, 
+            "batch_size": 70, "lr": 0.0001, 
+            'testProp': .2, "shuffle": False, "seed": 42}
 
 composed = torchvision.transforms.Compose([ToTensor(), RandomRotation()])
 
-trainData = OrganoidCNNDataset(transform=composed, train=True)
-testData = OrganoidCNNDataset(transform=composed, train=False)
+dataset = OrganoidCNNDataset(transform = composed)
 
-train_loader = DataLoader(dataset=trainData,
+dataSize = len(dataset)
+
+nSteps = int(dataSize*(1-hparam['testProp'])) // hparam['batch_size']
+
+'''
+# randomize train and test set
+indices = np.array(list(range(dataSize)))
+
+if hparam['shuffle']:
+    np.random.seed(hparam['seed'])
+    np.random.shuffle(indices)
+
+ixTest = np.random.choice(dataSize, numTest)
+trainIx, testIx = indices[ixTest], indices[~ixTest]
+
+print(~(trainIx == testIx).all())
+
+# Creating PT data samplers and loaders:
+trainSampler = SubsetRandomSampler(trainIx)
+testSampler = SubsetRandomSampler(testIx)
+'''
+
+nVal = int(dataSize * hparam['testProp'])
+nTrain = dataSize - nVal
+train_dataset, val_dataset = random_split(dataset, (nTrain, nVal))
+
+train_loader = DataLoader(dataset=train_dataset,
                           batch_size=hparam['batch_size'],
-                          shuffle=True,
+                          #sampler=trainSampler,
                           num_workers=2)
 
-test_loader = DataLoader(dataset=testData,
+val_loader = DataLoader(dataset = val_dataset,
                           batch_size=hparam['batch_size'],
-                          shuffle=False,
+                          #sampler= testSampler,
                           num_workers=2)
 
 model = ConvNet().to(device)
@@ -130,7 +158,6 @@ n_total_steps = len(train_loader)
 
 for epoch in range(hparam['num_epochs']):
     for i, (images, labels) in enumerate(train_loader):
-        
         images = images.to(device)
         labels = labels.to(device)
 
@@ -150,10 +177,10 @@ for epoch in range(hparam['num_epochs']):
         y = labels.detach().cpu().numpy()
         running_correct += np.sum(preds == y)
         
-        if (i+1) % 5 == 0: 
+        if (i+1) % nSteps == 0: 
             print (f'Epoch [{epoch+1}/{hparam["num_epochs"]}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
             writer.add_scalar('Training Loss', running_loss / hparam['batch_size'], epoch * n_total_steps + i)
-            running_accuracy = running_correct / (hparam['batch_size']*5)
+            running_accuracy = running_correct / (hparam['batch_size'] * nSteps)
             writer.add_scalar('Training Accuracy', running_accuracy, epoch * n_total_steps + i)
             running_correct = 0
             running_loss = 0.0
@@ -181,7 +208,7 @@ class_preds = []
 with torch.no_grad():
     n_correct = 0
     n_samples = 0
-    for images, labels in test_loader:
+    for images, labels in val_loader:
         images = images.to(device)
         labels = labels.to(device)
         outputs = model(images)

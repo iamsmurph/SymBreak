@@ -8,7 +8,8 @@ from sklearn.metrics import roc_curve, auc
 
 from torch.utils.tensorboard import SummaryWriter
 # default `log_dir` is "runs" - we'll be more specific here
-writer = SummaryWriter('runs/ffnn')
+flag = "5000RandomSplitRotation"
+writer = SummaryWriter('runs/ffnn/')
 
 
 class OrganoidFFNDataset(Dataset):
