@@ -3,13 +3,9 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import torch
 import torch.nn as nn
-import torchvision
-import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
-import matplotlib
+from sklearn.metrics import roc_curve, auc
 
-import sys
-import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 # default `log_dir` is "runs" - we'll be more specific here
 writer = SummaryWriter('runs/ffnn')
@@ -110,11 +106,10 @@ writer.add_graph(model, example_data.to(device))
 criterion = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)  
 
+######## Training ########
 def sigmoid(x):
   return 1 / (1 + np.exp(-x))
 
-
-# define vectorized sigmoid
 sigmoid_v = np.vectorize(sigmoid)
 
 # Train the model
@@ -154,8 +149,8 @@ for epoch in range(num_epochs):
             running_loss = 0.0
 
 
-from sklearn.metrics import roc_curve, auc
 
+######## Testing ########
 def roc_auc_graph(y, probs):
     fpr, tpr, _ = roc_curve(y, probs, pos_label=1)
     lw = 2
@@ -172,10 +167,9 @@ def roc_auc_graph(y, probs):
     plt.legend(loc="lower right")
     return fig
 
-# Test the model
-# In test phase, we don't need to compute gradients (for memory efficiency)
 class_labels = []
 class_preds = []
+# In test phase, we don't need to compute gradients (for memory efficiency)
 with torch.no_grad():
     n_correct = 0
     n_samples = 0
@@ -198,8 +192,3 @@ with torch.no_grad():
     #writer.add_pr_curve('test_roc_curve', labels, probs, 0)
     writer.add_figure('Test: ROC AUC', roc_auc_graph(y, probs), 0)
     writer.close()
-
-
-#fpr, tpr, thresholds = metrics.roc_curve(y, scores, pos_label=1)
-#plt.plot(fpr[2], tpr[2], color='darkorange',lw=2, label='ROC curve (area = %0.2f)' % roc_auc[2])
-
