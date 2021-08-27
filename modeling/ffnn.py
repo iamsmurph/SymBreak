@@ -1,34 +1,34 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 import numpy as np
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
+import random
+import torchvision.transforms.functional as TF
+import torchvision
 
 from torch.utils.tensorboard import SummaryWriter
 # default `log_dir` is "runs" - we'll be more specific here
-flag = "5000RandomSplitRotation"
-writer = SummaryWriter('runs/ffnn/')
-
+flag = "200epochsRotationRandomSplit"
+writer = SummaryWriter('runs/ffnn/' + flag)
 
 class OrganoidFFNDataset(Dataset):
 
     def __init__(self, transform=None, train=None):
-        df = np.loadtxt('scripting/dfLocalityReward.csv', delimiter=',', dtype=np.float32, skiprows=1)
+        df = np.loadtxt('scripting/dfLocalityReward.csv', 
+                            delimiter=',', 
+                            dtype=np.float32, 
+                            skiprows=1)
+        
         X = df[:, 1:]
         y = ((df[:, [0]] > df[:, 0].mean())*1).astype(np.float32)
-        if train == True:
-            self.n_samples = X[:-50].shape[0]
+        # CHANGE TO MEDIAN LATER FOR ADDITIONAL TESTING
 
-            self.x_data = X[:-50]
-            self.y_data = y[:-50]
-        else:
-            self.n_samples = X[-50:].shape[0]
-
-            self.x_data = X[-50:]
-            self.y_data = y[-50:]
-
+        self.n_samples = X.shape[0]
+        self.x_data = X
+        self.y_data = y
         self.transform = transform
 
     def __getitem__(self, index):
@@ -49,6 +49,17 @@ class ToTensor:
         inputs, targets = torch.from_numpy(inputs), torch.from_numpy(targets)
         targets = targets.to(torch.float32)
         return inputs, targets
+
+class RandomRotation:
+    #Rotate by one of the given angles
+    angles = [-180, -90, 0, 90]
+
+    def __call__(self, sample):
+        angle = random.choice(self.angles)
+        sampRotate = TF.rotate(sample[0].reshape(-1, 1, 41, 41), angle)
+        sampFlatten = torch.flatten(sampRotate)
+        # sampRotate.reshape(41*41)
+        return sampFlatten, sample[1]
 
 # Fully connected neural network with one hidden layer
 class NeuralNet(nn.Module):
@@ -71,41 +82,56 @@ class NeuralNet(nn.Module):
         out = self.relu(out)
         out = self.l4(out)
         #out = self.sigmoid(out)
-
         return out
 
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters 
-input_size = 1681 # 41x41
-output_size = 1
-num_epochs = 100
-batch_size = 70
-learning_rate = 0.0001
+hparam = {"input_size": 1681, "output_size": 1, "num_epochs": 200, 
+            "batch_size": 70, "lr": 0.0001, "valProp": .2, "shuffle": True, "seed": 42}
 
-trainData = OrganoidFFNDataset(transform=ToTensor(), train=True)
-testData = OrganoidFFNDataset(transform=ToTensor(), train=False)
+composed = torchvision.transforms.Compose([ToTensor(), RandomRotation()])
 
-train_loader = DataLoader(dataset=trainData,
-                          batch_size=batch_size,
-                          shuffle=True,
-                          num_workers=2)
+dataset = OrganoidFFNDataset(transform = composed)
 
-test_loader = DataLoader(dataset=testData,
-                          batch_size=batch_size,
-                          shuffle=False,
-                          num_workers=2)
+dataSize = len(dataset)
 
-model = NeuralNet(input_size, output_size).to(device) 
+nVal = int(dataSize * hparam['valProp'])
+nTrain = dataSize - nVal
+train_dataset, val_dataset = random_split(dataset, (nTrain, nVal))
+
+#trainData = OrganoidFFNDataset(transform = composed, train=True)
+#testData = OrganoidFFNDataset(transform = ToTensor(), train=False)
+
+train_loader = DataLoader(dataset = train_dataset,
+                          batch_size = hparam["batch_size"],
+                          shuffle = True,
+                          num_workers = 2)
+
+test_loader = DataLoader(dataset = val_dataset,
+                          batch_size = hparam["batch_size"],
+                          shuffle = False,
+                          num_workers = 2)
+
+model = NeuralNet(hparam['input_size'], hparam["output_size"]).to(device) 
 
 examples = iter(test_loader)
 example_data, example_targets = examples.next()
+
+dataiter = iter(train_loader)
+images, labels = dataiter.next()
+
+#writer.add_image('No rotation:', images[0].reshape(41, 41), 0, dataformats='HW')
+
+#sampRotate = TF.rotate(images[0].reshape(-1, 1, 41, 41), 90)
+#writer.add_image('Rotation:', sampRotate, 0, dataformats='NCHW')
+
 writer.add_graph(model, example_data.to(device))
 
 # Loss and optimizer
 criterion = nn.BCEWithLogitsLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)  
+optimizer = torch.optim.Adam(model.parameters(), lr=hparam['lr'])  
 
 ######## Training ########
 def sigmoid(x):
@@ -117,8 +143,8 @@ sigmoid_v = np.vectorize(sigmoid)
 running_correct = 0
 running_loss = 0.0
 n_total_steps = len(train_loader)
-
-for epoch in range(num_epochs):
+nSteps = nTrain // hparam["batch_size"]
+for epoch in range(hparam['num_epochs']):
     
     for i, (images, labels) in enumerate(train_loader):  
         
@@ -141,11 +167,11 @@ for epoch in range(num_epochs):
         y = labels.detach().cpu().numpy()
         running_correct += np.sum(preds == y)
         
-        if (i+1) % 5 == 0:
-            print (f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
-            writer.add_scalar('training loss', running_loss / batch_size, epoch * n_total_steps + i)
-            running_accuracy = running_correct / (batch_size*5)
-            writer.add_scalar('accuracy', running_accuracy, epoch * n_total_steps + i)
+        if (i+1) % nSteps == 0:
+            print (f'Epoch [{epoch+1}/{hparam["num_epochs"]}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
+            writer.add_scalar('training loss', running_loss / hparam["batch_size"], epoch * n_total_steps + i)
+            running_accuracy = running_correct / (hparam["batch_size"] * nSteps)
+            writer.add_scalar('Training Accuracy', running_accuracy, epoch * n_total_steps + i)
             running_correct = 0
             running_loss = 0.0
 
@@ -188,8 +214,12 @@ with torch.no_grad():
         
     
     acc = 100.0 * n_correct / n_samples
-    print(f'Accuracy of the network on the 10000 test images: {acc} %')
+    print(f'Accuracy of the network on the {nVal} validation images: {acc} %')
 
     #writer.add_pr_curve('test_roc_curve', labels, probs, 0)
     writer.add_figure('Test: ROC AUC', roc_auc_graph(y, probs), 0)
     writer.close()
+
+
+#X = df[:-20, 1:]
+#y = ((df[:-20, [0]] > df[:-20, 0].mean())*1).astype(np.float32)
