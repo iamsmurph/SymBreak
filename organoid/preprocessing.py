@@ -10,7 +10,7 @@ import re
 
 class Alignment:
     _closedWindows = 0
-
+    colors = ['m','g','b','y','r']
     # testing
     _colorVec = []
     _index = 0
@@ -102,18 +102,92 @@ class Alignment:
         plt.show()
         '''
 
-    def grouping(self, coordsTrue, coordsPheno, plot=False):
+    def matching(self, coordsTrue, coordsPheno, saveDirName, expName, validation = False):
+
+        dir_path = os.getcwd()
+        saveDir = os.path.join(dir_path, saveDirName)
+        if not os.path.exists(saveDir):
+            os.makedirs(saveDir)
+
+        valDir = os.path.join(saveDir, "validationIms_" + expName)
+        if not os.path.exists(valDir):
+            os.makedirs(valDir)
         
         orgNumsYaxisAscending = self._numOrgs(coordsTrue)
         
         # outputs dictionary of color keys and associated coordinates
-        groupsTrue = self._groupOrgs(coordsTrue, orgNumsYaxisAscending, showPlot = plot)
-        groupsPheno = self._groupOrgs(coordsPheno, orgNumsYaxisAscending, showPlot = plot)
+        groupsTrue = self._groupOrgs(coordsTrue, orgNumsYaxisAscending)
+        groupsPheno = self._groupOrgs(coordsPheno, orgNumsYaxisAscending)
         
         # returns array of coordinates and list of colors
-        c1,col1 = self._colorDict2Arr(groupsTrue)
-        c2,col2 = self._colorDict2Arr(groupsPheno)
-        return c1, col1, c2, col2
+        initCoord, initColor = self._colorDict2Arr(groupsTrue)
+        phenoCoord, phenoColor = self._colorDict2Arr(groupsPheno)
+
+        newColor = self.coloring(initCoord, initColor, phenoCoord, phenoColor)
+
+        resArrs = np.array([initCoord[:,0], initCoord[:,1], initColor, phenoCoord[:,0], phenoCoord[:,1], newColor])
+                            #, np.array(newColor)]
+        cNames = ['xInit', 'yInit', 'colorInit', 'xPheno', 'yPheno', 'colorPheno']
+        df = pd.DataFrame(data = resArrs.T, columns = cNames)
+
+        # make color vector from matched color plots
+        cnts = list(Counter(df.sort_values(by='yInit').yInit.values).values())
+        colors = ['m','g','b','y','r']
+        nCols = len(colors)
+        colorsOrder = [colors[i % nCols] for i, _ in enumerate(cnts)]
+
+        dfSorted_InitY = df.sort_values(by='yInit')
+        initIx = []
+        start = 0
+        for cnt in cnts:
+            subDf = dfSorted_InitY.iloc[start:start+cnt,:]
+            initInds = subDf.sort_values(by='xInit').index.values
+            initIx.extend(initInds)
+            start += cnt
+
+        dfSorted_PhenoY = df.sort_values(by='yPheno').reset_index()
+        dfSorted_PhenoY["temp"] = [0]*dfSorted_PhenoY.shape[0]
+        
+        phenoIx = []
+        for i, cnt in enumerate(cnts):
+            c = colorsOrder[i]
+            subDf = dfSorted_PhenoY[(dfSorted_PhenoY.colorPheno == c) & (dfSorted_PhenoY.temp == 0)].iloc[:cnt,:]
+            
+            # add indices to list
+            phenoInds = subDf.sort_values(by='xPheno')["index"].values
+            phenoIx.extend(phenoInds)
+            
+            # mark the indices which have been recorded and update
+            temp = dfSorted_PhenoY.temp.values
+            for ix in subDf.index.values:
+                temp[ix] = 1    
+            dfSorted_PhenoY["temp"] = temp 
+
+
+        dfINIT = df.loc[initIx].iloc[:, 1:4].copy()
+        dfPHENO = df.loc[phenoIx].iloc[:, 4:7].copy()
+        
+        init = dfINIT.reset_index(drop=True)
+        final = dfPHENO.reset_index(drop=True)
+        dfPaired = init.join(final)
+
+
+        assert(np.all(dfPaired.colorInit.values == dfPaired.colorPheno.values))
+
+        if validation:
+            for _ in range(10):
+                num = np.random.randint(low = 0, high = df.shape[0], size=1)
+
+                fig, axes = plt.subplots(1,2, figsize=(16,8))
+                axes[0].scatter(dfINIT.xInit.values, dfINIT.yInit.values, c=dfINIT.colorInit.values)
+                axes[0].scatter(dfINIT.xInit.values[num], dfINIT.yInit.values[num], c='black', s=100)
+
+                axes[1].scatter(dfPHENO.xPheno.values, dfPHENO.yPheno.values, c=dfPHENO.colorPheno.values)
+                axes[1].scatter(dfPHENO.xPheno.values[num], dfPHENO.yPheno.values[num], c='black', s=100)
+
+                fig.savefig(os.path.join(valDir, "organoid" + str(num)))
+
+        dfPaired.to_csv(os.path.join(saveDir, 'dfPaired_'+expName+".csv"), index=False)
 
     def _colorDict2Arr(self, colsDict):
         keys = list(colsDict.keys())
@@ -135,7 +209,7 @@ class Alignment:
         # return sorted counts
         return np.array(OrgsCntsSorted)[:,1]
 
-    def _groupOrgs(self, coords, cnts, showPlot = False):
+    def _groupOrgs(self, coords, cnts):
         # sort y coordinates in ascending order 
         coordsYsort = sorted(coords, key = lambda x: x[1])
 
@@ -144,19 +218,16 @@ class Alignment:
         colors_used = [0,0,0,0,0,0]
 
         # Colors used for plot and grouping organoids
-        colors = ['m','g','b','y','r'] #, 'brown'
-        
-        if showPlot:
-            plt.figure(figsize=(8,8))
+         #, 'brown'
 
-        num_col = len(colors)
+        num_col = len(self.colors)
         start = 0
         # loop through y axis layers, plot groups and save in dictionary
         for ix, num in enumerate(cnts):
             col_ix = ix % num_col
             vals = np.array(coordsYsort[start:start+num])
             valsXsort = sorted(vals, key = lambda x: x[0])
-            currColor = colors[col_ix]
+            currColor = self.colors[col_ix]
 
             # if color not in dictionary, add color
             # else denote its index e.g. blue3
@@ -168,15 +239,7 @@ class Alignment:
                 key_name = currColor + str(newKey_num)
                 patternDict[key_name] = valsXsort
                 colors_used[col_ix] = newKey_num
-
-            if showPlot:
-                plt.scatter(np.array(vals)[:,0], np.array(vals)[:,1], c = currColor)
             
             start = start+num
-        
-        if showPlot:
-            # flip y axis for plotting purposes
-            plt.gca().invert_yaxis()
-            plt.show()
         
         return patternDict
