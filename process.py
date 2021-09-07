@@ -10,7 +10,7 @@ from collections import Counter
 
 # loading centroid arrays
 initPattern = np.load("initRandom7.npy")
-finalPattern = np.load("finalRandom7.npy")
+finalPattern = np.load("coordReward.npy")
 
 # instantiate preprocessing class with save dir path
 p = preprocessing.Alignment("test")
@@ -32,4 +32,4 @@ p = preprocessing.Alignment("test")
 #expName = "random7"
 #df.to_csv(os.path.join(saveDir, 'matchedDF_' + expName), index=False)
 
-p.matching(initPattern, finalPattern, "test", "random7", validation = True) # add 
+p.matching(initPattern, finalPattern, "test", "CorrecteRandom7", validation = True) # add 
