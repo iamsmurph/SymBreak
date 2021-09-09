@@ -12,13 +12,13 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 from torch.utils.tensorboard import SummaryWriter
 # default `log_dir` is "runs" - we'll be more specific here
-flag = "433_repeat_epochsRotationRandomSplit_weightDecay_lRSched_Random7Data"
+flag = "433epochsRotationRandomSplit_weightDecay_lRSched_Random7Data"
 writer = SummaryWriter('runs/ffnn/' + flag)
 
 class OrganoidFFNDataset(Dataset):
 
     def __init__(self, transform=None, train=None):
-        df = np.load("OrganoidLocalities_random7.npy")
+        df = np.load()
         
         X = df[:, :-1].astype(np.float32)
         binaryTargs = ((df[:, -1] > df[:, -1].mean())*1)
