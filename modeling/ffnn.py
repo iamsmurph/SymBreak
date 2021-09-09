@@ -8,27 +8,26 @@ from sklearn.metrics import roc_curve, auc
 import random
 import torchvision.transforms.functional as TF
 import torchvision
+from torch.optim.lr_scheduler import ExponentialLR
 
 from torch.utils.tensorboard import SummaryWriter
 # default `log_dir` is "runs" - we'll be more specific here
-flag = "200epochsRotationRandomSplit"
+flag = "433_repeat_epochsRotationRandomSplit_weightDecay_lRSched_Random7Data"
 writer = SummaryWriter('runs/ffnn/' + flag)
 
 class OrganoidFFNDataset(Dataset):
 
     def __init__(self, transform=None, train=None):
-        df = np.loadtxt('scripting/dfLocalityReward.csv', 
-                            delimiter=',', 
-                            dtype=np.float32, 
-                            skiprows=1)
+        df = np.load("OrganoidLocalities_random7.npy")
         
-        X = df[:, 1:]
-        y = ((df[:, [0]] > df[:, 0].mean())*1).astype(np.float32)
+        X = df[:, :-1].astype(np.float32)
+        binaryTargs = ((df[:, -1] > df[:, -1].mean())*1)
+        y = binaryTargs.astype(np.float32).reshape(-1, 1)
         # CHANGE TO MEDIAN LATER FOR ADDITIONAL TESTING
 
         self.n_samples = X.shape[0]
-        self.x_data = X
-        self.y_data = y
+        self.x_data = torch.from_numpy(X)
+        self.y_data = torch.from_numpy(y)
         self.transform = transform
 
     def __getitem__(self, index):
@@ -56,7 +55,7 @@ class RandomRotation:
 
     def __call__(self, sample):
         angle = random.choice(self.angles)
-        sampRotate = TF.rotate(sample[0].reshape(-1, 1, 41, 41), angle)
+        sampRotate = TF.rotate(sample[0].reshape(-1, 1, 11, 11), angle)
         sampFlatten = torch.flatten(sampRotate)
         # sampRotate.reshape(41*41)
         return sampFlatten, sample[1]
@@ -88,10 +87,11 @@ class NeuralNet(nn.Module):
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters 
-hparam = {"input_size": 1681, "output_size": 1, "num_epochs": 200, 
-            "batch_size": 70, "lr": 0.0001, "valProp": .2, "shuffle": True, "seed": 42}
+hparam = {"input_size": 121, "output_size": 1, "num_epochs": 433, 
+            "batch_size": 35, "lr": 1e-4, "weight_decay": 1e-6,
+            "valProp": .2, "trShuffle": True, "tstShuffle": False} # "seed": 42
 
-composed = torchvision.transforms.Compose([ToTensor(), RandomRotation()])
+composed = torchvision.transforms.Compose([RandomRotation()]) #ToTensor(), 
 
 dataset = OrganoidFFNDataset(transform = composed)
 
@@ -106,12 +106,12 @@ train_dataset, val_dataset = random_split(dataset, (nTrain, nVal))
 
 train_loader = DataLoader(dataset = train_dataset,
                           batch_size = hparam["batch_size"],
-                          shuffle = True,
+                          shuffle = hparam['trShuffle'],
                           num_workers = 2)
 
 test_loader = DataLoader(dataset = val_dataset,
                           batch_size = hparam["batch_size"],
-                          shuffle = False,
+                          shuffle = hparam['tstShuffle'],
                           num_workers = 2)
 
 model = NeuralNet(hparam['input_size'], hparam["output_size"]).to(device) 
@@ -131,7 +131,10 @@ writer.add_graph(model, example_data.to(device))
 
 # Loss and optimizer
 criterion = nn.BCEWithLogitsLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=hparam['lr'])  
+optimizer = torch.optim.Adam(model.parameters(), 
+                                lr = hparam['lr'], 
+                                weight_decay = hparam["weight_decay"])  
+scheduler = ExponentialLR(optimizer, gamma=0.995)
 
 ######## Training ########
 def sigmoid(x):
@@ -141,11 +144,10 @@ sigmoid_v = np.vectorize(sigmoid)
 
 # Train the model
 running_correct = 0
-running_loss = 0.0
+running_count = 0
 n_total_steps = len(train_loader)
 nSteps = nTrain // hparam["batch_size"]
 for epoch in range(hparam['num_epochs']):
-    
     for i, (images, labels) in enumerate(train_loader):  
         
         images = images.to(device) #.reshape(-1, input_size) if necessary
@@ -157,25 +159,23 @@ for epoch in range(hparam['num_epochs']):
         
         # Backward and optimize
         optimizer.zero_grad()
+
         loss.backward()
         optimizer.step()
-
-        running_loss += loss.item()
 
         probs = sigmoid_v(outputs.detach().cpu().numpy())
         preds = np.where(probs > 0.5, 1, 0)
         y = labels.detach().cpu().numpy()
+
         running_correct += np.sum(preds == y)
+        running_count += len(y)
         
-        if (i+1) % nSteps == 0:
-            print (f'Epoch [{epoch+1}/{hparam["num_epochs"]}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
-            writer.add_scalar('training loss', running_loss / hparam["batch_size"], epoch * n_total_steps + i)
-            running_accuracy = running_correct / (hparam["batch_size"] * nSteps)
-            writer.add_scalar('Training Accuracy', running_accuracy, epoch * n_total_steps + i)
-            running_correct = 0
-            running_loss = 0.0
+        if (i + 1) % n_total_steps == 0:
+            print(f'Epoch [{epoch+1}/{hparam["num_epochs"]}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
+            writer.add_scalar('Training Accuracy', np.sum(preds == y) / len(y), epoch * n_total_steps)
+            writer.add_scalar('Training Loss', loss.item(), epoch * n_total_steps)
 
-
+    scheduler.step()
 
 ######## Testing ########
 def roc_auc_graph(y, probs):
@@ -215,6 +215,7 @@ with torch.no_grad():
     
     acc = 100.0 * n_correct / n_samples
     print(f'Accuracy of the network on the {nVal} validation images: {acc} %')
+    writer.add_scalar('Test Accuracy', acc, 0)
 
     #writer.add_pr_curve('test_roc_curve', labels, probs, 0)
     writer.add_figure('Test: ROC AUC', roc_auc_graph(y, probs), 0)
