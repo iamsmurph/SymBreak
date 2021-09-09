@@ -1,10 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import pickle
 import os
-import sys
-import cv2
-import pandas as pd
 from collections import Counter
 import re
 
@@ -20,92 +16,6 @@ class Alignment:
     def __init__(self, saveDir):
         self.saveDir = saveDir
 
-    def matching(self, initCoords, finalCoords, saveDirName, expName, validation = False):
-        # main function for matching two patterns
-        
-        dir_path = os.getcwd()
-        saveDir = os.path.join(dir_path, saveDirName)
-        if not os.path.exists(saveDir):
-            os.makedirs(saveDir)
-
-        if validation:
-            valDir = os.path.join(saveDir, "validationIms_" + expName)
-            if not os.path.exists(valDir):
-                os.makedirs(valDir)
-        
-        yValCnts = self._numOrgs(initCoords)
-
-        initGrpArr, finalGrpArr, colorArr = self._groupOrgs(initCoords, finalCoords, yValCnts)
-
-        assert(initGrpArr.shape[0] == finalGrpArr.shape[0] == len(colorArr))
-
-        #annotColor = self._coloring(initGrpArr, finalGrpArr, colorArr)
-
-        """ corrections
-        resArrs = np.array([initGrpArr[:,0], initGrpArr[:,1], colorArr, finalGrpArr[:,0], finalGrpArr[:,1], annotColor])
-        cNames = ['xInit', 'yInit', 'colorInit', 'xPheno', 'yPheno', 'colorPheno']
-        df = pd.DataFrame(data = resArrs.T, columns = cNames)
-
-        # make color vector from matched color plots
-        cnts = list(Counter(df.sort_values(by='yInit').yInit.values).values())
-        colors = ['m','g','b','y','r']
-        nCols = len(colors)
-        colorsOrder = [colors[i % nCols] for i, _ in enumerate(cnts)]
-
-        dfSorted_InitY = df.sort_values(by='yInit')
-        initIx = []
-        start = 0
-        for cnt in cnts:
-            subDf = dfSorted_InitY.iloc[start:start+cnt,:]
-            initInds = subDf.sort_values(by='xInit').index.values
-            initIx.extend(initInds)
-            start += cnt
-
-        dfSorted_PhenoY = df.sort_values(by='yPheno').reset_index()
-        dfSorted_PhenoY["temp"] = [0]*dfSorted_PhenoY.shape[0]
-        
-        phenoIx = []
-        for i, cnt in enumerate(cnts):
-            c = colorsOrder[i]
-            subDf = dfSorted_PhenoY[(dfSorted_PhenoY.colorPheno == c) & (dfSorted_PhenoY.temp == 0)].iloc[:cnt,:]
-            
-            # add indices to list
-            phenoInds = subDf.sort_values(by='xPheno')["index"].values
-            phenoIx.extend(phenoInds)
-            
-            # mark the indices which have been recorded and update
-            temp = dfSorted_PhenoY.temp.values
-            for ix in subDf.index.values:
-                temp[ix] = 1    
-            dfSorted_PhenoY["temp"] = temp 
-
-
-        dfINIT = df.loc[initIx].iloc[:, 1:4].copy()
-        dfPHENO = df.loc[phenoIx].iloc[:, 4:7].copy()
-        
-        init = dfINIT.reset_index(drop=True)
-        final = dfPHENO.reset_index(drop=True)
-        dfPaired = init.join(final)
-
-
-        assert(np.all(dfPaired.colorInit.values == dfPaired.colorPheno.values))
-
-        if validation:
-            for _ in range(10):
-                num = np.random.randint(low = 0, high = df.shape[0], size=1)
-
-                fig, axes = plt.subplots(1,2, figsize=(16,8))
-                axes[0].scatter(dfINIT.xInit.values, dfINIT.yInit.values, c=dfINIT.colorInit.values)
-                axes[0].scatter(dfINIT.xInit.values[num], dfINIT.yInit.values[num], c='black', s=100)
-
-                axes[1].scatter(dfPHENO.xPheno.values, dfPHENO.yPheno.values, c=dfPHENO.colorPheno.values)
-                axes[1].scatter(dfPHENO.xPheno.values[num], dfPHENO.yPheno.values[num], c='black', s=100)
-
-                fig.savefig(os.path.join(valDir, "organoid" + str(num)))
-
-        dfPaired.to_csv(os.path.join(saveDir, 'dfPaired_'+expName+".csv"), index=False)
-        """
-
     def _numOrgs(self, initCoords):
         #  return counts of unique y values in sorted order
 
@@ -116,50 +26,60 @@ class Alignment:
         yValCntsSorted = sorted(yValCnts)
         return np.array(yValCntsSorted)[:,1]
 
-    def _groupOrgs(self, initCoords, finalCoords, yValCounts):
-        # sort coordinates by y values then x values
-        # associate each unique y value with a color
+    def _initColors(self, initCoords, finalCoords, yValCnts):
+        initGrpd, colors = self._groupAndColor(initCoords, yValCnts)
+        finalGrpd, finalColors = self._groupAndColor(finalCoords, yValCnts)
+        assert(colors == finalColors)
+        return initGrpd, finalGrpd, colors
+    
+    def _groupAndColor(self, coords, yValCnts):
+        # group coordinates by y values, sort x values within groups, assign colors to groups
+        coordsYsort = sorted(coords, key = lambda column: column[1])
 
-        initCoordsYsort = sorted(initCoords, key = lambda x: x[1])
-        finalCoordsYsort = sorted(finalCoords, key = lambda x: x[1])
-
-        colorsUsed = [0,0,0,0,0,0]
+        patternDict = {}
+        colors_used = [0,0,0,0,0,0]
 
         nColors = len(self.colors)
         start = 0
 
-        initGrpdCoordList = []
-        finalGrpdCoordList = []
-        colors = []
+        for ix, cnt in enumerate(yValCnts):
+            colIx = ix % nColors
+            vals = np.array(coordsYsort[start:start+cnt])
+            valsXsort = sorted(vals, key = lambda x: x[0])
+            currColor = self.colors[colIx]
+            currColor = self.colors[colIx]
 
-        for ix, count in enumerate(yValCounts):
-            colorIx = ix % nColors
-            hi1 = self._xSort(initCoordsYsort, start, start + count)
-            hi2 = self._xSort(finalCoordsYsort, start, start + count)
-            initGrpdCoordList.append(hi1)
-            finalGrpdCoordList.append(hi2)
+            if currColor not in patternDict:
+                patternDict[currColor] = valsXsort
+            else:
+                keyNum = colors_used[colIx]
+                newKeyNum = keyNum + 1
+                keyName = currColor + str(newKeyNum)
+                patternDict[keyName] = valsXsort
+                colors_used[colIx] = newKeyNum
 
-            currColor = self.colors[colorIx]
-            colors.extend([currColor] * count)
+            start = start + cnt
 
-        return np.vstack(initGrpdCoordList), np.vstack(finalGrpdCoordList), colors
-    
-    def _xSort(self, coords, start, end):
-        # extract and sort values by x axis
-        groupByY = np.array(coords[start:end])
-        groupXsorted = sorted(groupByY, key = lambda x: x[0])
-        return groupXsorted
+        return self._colorDict2Arr(patternDict)
 
-    def _coloring(self, initCoords, finalCoords, colors):
+    def _colorDict2Arr(self, colsDict):
+        keys = list(colsDict.keys())
+        coordList = []
+        colList = []
+        for key in keys:
+            col = re.sub(r'[0-9]+', '', key)
+            colList.extend([col for _ in range(len(colsDict[key]))])
+            coordList.append(np.array(colsDict[key]))
+        return np.vstack(coordList), colList
+
+    def _fixColors(self, initCoords, finalCoords, colors):
         # Manually annotate to align color coding of two input patterns
-
         X = finalCoords[:,0]
         Y = finalCoords[:,1]
+        xyVec = np.array([X,Y]).T
         numCoords = len(X)
-
         self._colorVec = colors.copy()
 
-        # plot reference and annotation image
         refFig = plt.figure(1)
         plt.scatter(initCoords[:,0], initCoords[:,1], c = colors)
         plt.title("REFERENCE IMAGE")
@@ -180,7 +100,7 @@ class Alignment:
 
             # record changes 
             clickVec = np.tile(clickCoord, (numCoords, 1))
-            diff = clickVec - finalCoords
+            diff = clickVec - xyVec
             sumSqDiff = np.sum(diff*diff, axis=1)
             ix = np.argmin(sumSqDiff)
             self._index = ix
@@ -206,10 +126,148 @@ class Alignment:
 
         # if both windows close, end return annotation
         if self._closedWindows == 2:
+            print("### Exiting manual annotation ###")
+            print()
             return self._colorVec
-
     
+    def _colorArr2Dict(self, colors, yValCnts):
+        colorDict = {}
+        colors_used = {'m':0,'g':0,'b':0,'y':0,'r':0}
 
-    
+        nColors = len(self.colors)
+        start = 0
 
+        for ix, cnt in enumerate(yValCnts):
+            currColor = colors[start]
+
+            if currColor not in colorDict:
+                colorDict[currColor] = cnt
+            else:
+                colors_used[currColor] += 1
+                keyName = currColor + str(colors_used[currColor])
+                colorDict[keyName] = cnt
+
+            start = start + cnt
+
+        return colorDict
+
+    def _sortX(self, coords, yValCnts):
+        reOrderCoords = []
+        
+        start = 0
+        for cnt in yValCnts:
+            subCoords = coords[start: start + cnt]
+            sortedSubCoords = sorted(subCoords, key = lambda column: column[0])
+            reOrderCoords.append(sortedSubCoords)
+        
+            start = start + cnt
+
+        return np.vstack(reOrderCoords)
     
+    def _updateFinalCoords(self, coords, oldColors, newColors,  yValCnts):
+
+        colorDict = self._colorArr2Dict(oldColors, yValCnts)
+        newColorsCopy = newColors.copy() 
+        correctIx = []
+        for oldColor, cnt in colorDict.items():
+            oldColor = col = re.sub(r'[0-9]+', '', oldColor)
+            counter = 0
+            for ix, newColor in enumerate(newColorsCopy):
+                if newColor == oldColor:
+                    correctIx.append(ix)
+                    newColorsCopy[ix] = 'Taken'
+                    counter += 1
+                if counter == cnt:
+                    break
+        
+        assert(correctIx != list(range(len(oldColors))))
+
+        correctedNewColors = [newColors[ix] for ix in correctIx]
+        correctedFinalCoords = [coords[ix] for ix in correctIx]
+        
+        assert(len(correctIx) == len(oldColors))
+        assert(oldColors == correctedNewColors)
+
+        correctedFinalCoords = self._sortX(correctedFinalCoords, yValCnts)
+
+        return correctedFinalCoords
+
+    def _getLocalities(self, df, searchLen, normScalar):
+        x = df[:, 0].astype(int) // normScalar
+        y = df[:, 1].astype(int) // normScalar
+        
+        xRange = np.max(x) - np.min(x)
+        yRange = np.max(y) - np.min(y)
+        maxRange = np.max((xRange, yRange))
+        
+        normSearchLen = searchLen // normScalar
+        
+        maskDim =  maxRange + 4*normSearchLen
+        mask = np.zeros((maskDim, maskDim))
+        
+        centroids = []
+        rewards = []
+        localities = []
+        
+        # draw 1 by 1 organoids on mask with padding
+        for ix, coord in enumerate(zip(x, y)):
+            cx = coord[0] + 2*normSearchLen
+            cy = coord[1] + 2*normSearchLen
+            centroids.append((cx,cy))
+            mask[cx, cy] = 1
+            
+            rewards.append(df[:, -1][ix])
+
+        # extract localities 
+        for ix, c in enumerate(centroids):
+            cx, cy = c[0], c[1]
+            locality = mask[cx-normSearchLen: cx+normSearchLen+1, cy-normSearchLen: cy+normSearchLen+1]
+            localities.append(np.append(locality.flatten(), rewards[ix]))
+            
+        return localities
+
+    def matching(self, initCoords, finalCoords, expName, searchLen, normScalar, validation = False):
+        # main function for matching two patterns
+        
+        dir_path = os.getcwd()
+        saveDir = os.path.join(dir_path, "datasets", self.saveDir)
+        if not os.path.exists(saveDir):
+            os.makedirs(saveDir)
+
+        if validation:
+            valDir = os.path.join(saveDir, "validationIms_" + expName)
+            if not os.path.exists(valDir):
+                os.makedirs(valDir)
+        
+        yValCnts = self._numOrgs(initCoords)
+
+        initGrpCoords, finalGrpCoords, colors = self._initColors(initCoords, finalCoords, yValCnts)
+
+        assert(initGrpCoords.shape[0] == finalGrpCoords.shape[0] == len(colors))
+
+        annotColors = self._fixColors(initGrpCoords, finalGrpCoords, colors)
+
+        correctedFinalCoords = np.array(self._updateFinalCoords(finalGrpCoords, colors, annotColors, list(yValCnts)))
+
+        if validation:
+            print("Saving validation images in subdirectory...")
+            for _ in range(30):
+                num = np.random.randint(low = 0, high = len(correctedFinalCoords)-1, size=1) 
+
+                fig, axes = plt.subplots(1,2, figsize=(16,8))
+                axes[0].scatter(initCoords[:,0], initCoords[:,1], c=colors)
+                axes[0].scatter(initCoords[:,0][num], initCoords[:,1][num], c='black', s=100)
+
+                axes[1].scatter(correctedFinalCoords[:,0], correctedFinalCoords[:,1], c=colors)
+                axes[1].scatter(correctedFinalCoords[:,0][num], correctedFinalCoords[:,1][num], c='black', s=100)
+
+                fig.savefig(os.path.join(valDir, "organoid" + str(num)))
+
+        df = np.hstack((initCoords, correctedFinalCoords))
+
+        print("Saving matched dataframe...")
+        np.save(os.path.join(saveDir, "matchDF"), df)
+
+        localities = self._getLocalities(df, searchLen, normScalar)
+        print("Saving localities and rewards...")
+        np.save(os.path.join(saveDir, "localsAndRewards"), localities)

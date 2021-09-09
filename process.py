@@ -12,8 +12,10 @@ from collections import Counter
 initPattern = np.load("initRandom7.npy")
 finalPattern = np.load("coordReward.npy")
 
+# experiment name
+dir = "random7"
 # instantiate preprocessing class with save dir path
-p = preprocessing.Alignment("test")
+p = preprocessing.Alignment(dir)
 # get groups
 #coordsInit, colInit, coordsPheno, colPheno = p.grouping(initPattern, finalPattern) # add saveDir, expName 
 
@@ -32,4 +34,4 @@ p = preprocessing.Alignment("test")
 #expName = "random7"
 #df.to_csv(os.path.join(saveDir, 'matchedDF_' + expName), index=False)
 
-p.matching(initPattern, finalPattern, "test", "CorrecteRandom7", validation = True) # add 
+p.matching(initPattern, finalPattern, dir, searchLen = 1000, normScalar = 200, validation = True) 
