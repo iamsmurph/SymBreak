@@ -1,3 +1,4 @@
+from typing import final
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -179,8 +180,6 @@ class Alignment:
                     counter += 1
                 if counter == cnt:
                     break
-        
-        assert(correctIx != list(range(len(oldColors))))
 
         correctedNewColors = [newColors[ix] for ix in correctIx]
         correctedFinalCoords = [coords[ix] for ix in correctIx]
@@ -226,8 +225,10 @@ class Alignment:
             
         return localities
 
-    def matching(self, initCoords, finalCoords, expName, searchLen, normScalar, validation = False):
+    def matching(self, initCoords, finalCoords, searchLen, normScalar, validation = False):
         # main function for matching two patterns
+
+        assert(initCoords.shape[0] == finalCoords.shape[0])
         
         dir_path = os.getcwd()
         saveDir = os.path.join(dir_path, "datasets", self.saveDir)
@@ -235,7 +236,7 @@ class Alignment:
             os.makedirs(saveDir)
 
         if validation:
-            valDir = os.path.join(saveDir, "validationIms_" + expName)
+            valDir = os.path.join(saveDir, "validationIms_" + self.saveDir)
             if not os.path.exists(valDir):
                 os.makedirs(valDir)
         
@@ -262,6 +263,7 @@ class Alignment:
                 axes[1].scatter(correctedFinalCoords[:,0][num], correctedFinalCoords[:,1][num], c='black', s=100)
 
                 fig.savefig(os.path.join(valDir, "organoid" + str(num)))
+                plt.close(fig)
 
         df = np.hstack((initCoords, correctedFinalCoords))
 
