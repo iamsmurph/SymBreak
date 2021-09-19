@@ -44,6 +44,7 @@ class Alignment:
         start = 0
 
         for ix, cnt in enumerate(yValCnts):
+            cnt = int(cnt)
             colIx = ix % nColors
             vals = np.array(coordsYsort[start:start+cnt])
             valsXsort = sorted(vals, key = lambda x: x[0])
@@ -139,6 +140,7 @@ class Alignment:
         start = 0
 
         for ix, cnt in enumerate(yValCnts):
+            cnt = int(cnt)
             currColor = colors[start]
 
             if currColor not in colorDict:
@@ -157,6 +159,7 @@ class Alignment:
         
         start = 0
         for cnt in yValCnts:
+            cnt = int(cnt)
             subCoords = coords[start: start + cnt]
             sortedSubCoords = sorted(subCoords, key = lambda column: column[0])
             reOrderCoords.append(sortedSubCoords)
@@ -171,6 +174,7 @@ class Alignment:
         newColorsCopy = newColors.copy() 
         correctIx = []
         for oldColor, cnt in colorDict.items():
+            cnt = int(cnt)
             oldColor = col = re.sub(r'[0-9]+', '', oldColor)
             counter = 0
             for ix, newColor in enumerate(newColorsCopy):
@@ -256,8 +260,8 @@ class Alignment:
                 num = np.random.randint(low = 0, high = len(correctedFinalCoords)-1, size=1) 
 
                 fig, axes = plt.subplots(1,2, figsize=(16,8))
-                axes[0].scatter(initCoords[:,0], initCoords[:,1], c=colors)
-                axes[0].scatter(initCoords[:,0][num], initCoords[:,1][num], c='black', s=100)
+                axes[0].scatter(initGrpCoords[:,0], initGrpCoords[:,1], c=colors)
+                axes[0].scatter(initGrpCoords[:,0][num], initGrpCoords[:,1][num], c='black', s=100)
 
                 axes[1].scatter(correctedFinalCoords[:,0], correctedFinalCoords[:,1], c=colors)
                 axes[1].scatter(correctedFinalCoords[:,0][num], correctedFinalCoords[:,1][num], c='black', s=100)
