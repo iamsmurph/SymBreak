@@ -3,13 +3,13 @@ import numpy as np
 from collections import Counter
 
 # experiment id
-expNum = 3
+expNum = 12
 
 #data dir
-dir = "random3_init"
+dir = "random12_design"
 
 # loading centroid arrays
-initPattern = np.load("datasets/" + dir + "/initRandom" + str(expNum) + ".npy")
+initPattern = np.load("datasets/" + dir + "/designRandom" + str(expNum) + ".npy")
 finalPattern = np.load("datasets/" + dir + "/coordsRewardRandom" + str(expNum) + ".npy")
 
 # instantiate preprocessing class with save dir path
