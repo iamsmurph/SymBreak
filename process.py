@@ -3,10 +3,10 @@ import numpy as np
 from collections import Counter
 
 # experiment id
-expNum = 11
+expNum = 12
 
 #data dir
-dir = "random11_design"
+dir = "random12_design_v2"
 
 # loading centroid arrays
 initPattern = np.load("datasets/" + dir + "/designRandom" + str(expNum) + ".npy")
