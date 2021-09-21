@@ -91,6 +91,10 @@ binaryTargs = (df[:, -4] > 0.125)*1
 y = binaryTargs.astype(np.float32).reshape(-1, 1)
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=hparam["valProp"], stratify=y)
 
+n = X_val.shape[0]
+posTargs = np.sum(X_val)
+weight = (n-posTargs)/posTargs
+
 print(np.sum(y_train))
 print(np.sum(y_val))
 
@@ -103,8 +107,6 @@ nTrain = len(trainDataset)
 #nVal = int(dataSize * hparam['valProp'])
 #nTrain = dataSize - nVal
 #train_dataset, val_dataset = random_split(dataset, (nTrain, nVal))
-
-
 
 #trainData = OrganoidFFNDataset(transform = composed, train=True)
 #testData = OrganoidFFNDataset(transform = ToTensor(), train=False)
@@ -135,7 +137,8 @@ images, labels = dataiter.next()
 writer.add_graph(model, example_data.to(device))
 
 # Loss and optimizer
-criterion = nn.BCEWithLogitsLoss()
+pos_weight = torch.ones([1]) * weight
+criterion = nn.BCEWithLogitsLoss(pos_weight= pos_weight.to(device))
 optimizer = torch.optim.Adam(model.parameters(), lr = hparam['lr'])  #weight_decay = hparam["weight_decay"]
 #scheduler = ExponentialLR(optimizer, gamma = hparam['lrDecay'])
 
