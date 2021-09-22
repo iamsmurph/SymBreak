@@ -123,17 +123,11 @@ val_loader = DataLoader(dataset = valDataset,
 
 model = NeuralNet(hparam['input_size'], hparam["output_size"]).to(device) 
 
+# save graph
 examples = iter(val_loader)
-example_data, example_targets = examples.next()
-
+example_data, _ = examples.next()
 dataiter = iter(train_loader)
 images, labels = dataiter.next()
-
-#writer.add_image('No rotation:', images[0].reshape(41, 41), 0, dataformats='HW')
-
-#sampRotate = TF.rotate(images[0].reshape(-1, 1, 41, 41), 90)
-#writer.add_image('Rotation:', sampRotate, 0, dataformats='NCHW')
-
 writer.add_graph(model, example_data.to(device))
 
 # Loss and optimizer
