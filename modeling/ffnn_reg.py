@@ -14,7 +14,7 @@ from tqdm import tqdm
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 config = dict(data_dir = "datasets/big_model.npy", 
-            epochs = 10, batch_size = 10, learning_rate = 1e-5, 
+            epochs = 1000, batch_size = 50, learning_rate = 1e-5, 
             dropout_prob = 0.25, test_size = .2, train_shuff = True, 
             test_shuff = False, weight_decay = 0.9)
 
@@ -100,16 +100,12 @@ class Discriminator(nn.Module):
         self.dropout = nn.Dropout(dropout_prob)
         
         # for feature extraction model
-        self.l1 = nn.Linear(24, 10, bias=True)
-        self.l2 = nn.Linear(10, 5, bias=True)
+        self.l1 = nn.Linear(24, 1, bias=True)
+        self.l2 = nn.Linear(10, 1, bias=True)
         self.lf = nn.Linear(5, 1, bias=True)
     
     def forward(self, x):
         out = self.l1(x)
-        out = self.relu(out)
-        out = self.l2(out)
-        out = self.relu(out)
-        out = self.lf(out)
         out = self.relu(out)
         return out
 
