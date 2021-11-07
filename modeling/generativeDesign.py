@@ -5,12 +5,13 @@ import cupy as cp
 from cupyx.scipy import ndimage
 from sklearn.svm import SVR
 from sklearn.model_selection import cross_val_score
+from sklearn.preprocessing import StandardScaler
 from datetime import datetime
 from PIL import Image
 import pickle
 import os
 import sys
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 # functions
 def generate_window(seed):
@@ -43,25 +44,21 @@ def extract_features(image, sigma, centroids):
     im_blur = ndimage.gaussian_filter(cp.array(image), sigma=sigma, mode='constant',cval=0)
     im_blur_norm=im_blur*sigma*cp.sqrt(np.pi)
     
-    plt.imshow(im_blur_norm.get())
-    name = "gaussian_" + str(sigma)+ "_" + str(seed) + ".jpeg"
-    plt.savefig(os.path.join(save_dir, name))
-
-    #ha = Image.fromarray(im_blur_norm.get())
-    #ha = ha.convert("RGB")
-    #ha.save(os.path.join(save_dir, "gauss_blur_" + str(sigma)+ "_" + str(seed) + ".jpeg"))
+    #plt.imshow(im_blur_norm.get())
+    #name = "gaussian_" + str(sigma)+ "_" + str(seed) + ".jpeg"
+    #plt.axis("off")
+    #plt.show()
+    #plt.savefig(os.path.join(save_dir, name), bbox_inches='tight', transparent=True, pad_inches=0, dpi=200)
 
     im_sx = ndimage.sobel(im_blur_norm, axis=1, mode='reflect')
     im_sy = ndimage.sobel(im_blur_norm, axis=0, mode='reflect')
     im_sobel=np.hypot(im_sx, im_sy)
 
-    plt.imshow(im_sobel.get())
-    name = "sobel_" + str(sigma)+ "_" + str(seed) + ".jpeg"
-    plt.savefig(os.path.join(save_dir, name))
-
-    #ha = Image.fromarray(im_sobel.get())
-    #ha = ha.convert("RGB")
-    #ha.save(os.path.join(save_dir, "sobel_filt_" + str(sigma)+ "_" + str(seed) + ".jpeg"))
+    #plt.imshow(im_sobel.get())
+    #plt.axis("off")
+    #name = "sobel_" + str(sigma)+ "_" + str(seed) + ".jpeg"
+    #plt.show()
+    #plt.savefig(os.path.join(save_dir, name), bbox_inches='tight', transparent=True, pad_inches=0, dpi=200)
 
     feats = []
    
@@ -86,9 +83,9 @@ def simulate(image, centers, weights):
     test_img[nx-75:nx+75, ny-75:ny+75] = 255
     test_centers[ix] = (nx, ny)
     
-    new_score, _ = evaluate(test_img, test_centers)
+    sim_score, preds, weights = evaluate(test_img, test_centers)
     
-    return test_img, test_centers, new_score
+    return test_img, test_centers, sim_score, preds, weights
 
 def random_move(centers, weights):
     found_valid_move = False
@@ -96,13 +93,9 @@ def random_move(centers, weights):
     
     while not found_valid_move:
         cixs = list(range(len(centers)))
-        random_index = 0
         
-        if selection == "weighted":
-            random_index = np.random.choice(cixs, 1, p = weights)[0] 
-        else:
-            random_index = np.random.choice(cixs, 1)
-        
+        random_index = np.random.choice(cixs, 1, p=weights)[0]
+
         angle = np.pi * np.random.uniform(0, 2)
         length = np.rint(max(50, perturb_len*decay_rate**iter))
         dx, dy = length*np.cos(angle), length*np.sin(angle)
@@ -143,21 +136,23 @@ def evaluate(im_pattern, centroids):
         new_feats.append(feats[:, 1].reshape(-1,1))
 
     new_feats = [new_feats[ix] for ix in ix_sigs] 
-    new_feats = np.hstack(new_feats)
+    new_feats = scaler.transform(np.hstack(new_feats))
     preds = model.predict(new_feats)
-    weights = rel_probs(preds)
+    weights = weights_exp(preds)
     pred_mean = np.mean(preds)
     
-    # check if centroids IX matches weights IX
-    # should be the case as feats computes features 
-    return pred_mean, weights
+    return pred_mean, preds, weights
 
-def rel_probs_exp(arr):
+def weights_uniform(arr):
+    n = len(arr)
+    return [1/n]*len(arr)
+
+def weights_exp(arr):
     phiArr = np.exp(-1*arr)
     weights = phiArr / np.sum(phiArr)
     return weights
 
-def rel_probs(arr):
+def weights_minmax(arr):
     maxVal, minVal = np.max(arr), np.min(arr)
     phiArr = -1*arr+minVal+maxVal
     weights = phiArr / np.sum(phiArr)
@@ -189,13 +184,12 @@ if __name__ == '__main__':
     # configs
     curr_dir = os.path.abspath(os.getcwd())
     save_dir = os.path.join(curr_dir, "modeling/disc_gen_outputs")
-    niter = 1
+    niter = 3000
     perturb_len = 200
-    decay_rate = 0.9993
+    decay_rate = 0.99954
     pattern_dim = 40
     p = 1/16
     pad = 200
-    selection = "weighted"
 
     # get args from user
     seed = int(sys.argv[1])
@@ -207,24 +201,34 @@ if __name__ == '__main__':
 
     # save configs
     config_dict = {}
-    for variable in ["niter", "perturb_len", "decay_rate", "pad", "selection"]:
+    for variable in ["niter", "perturb_len", "decay_rate", "pad"]:
         config_dict[variable] = eval(variable)
 
     a_file = open(os.path.join(save_dir,"configs" + str(seed) + "_" + str(log_time) + ".pkl"), "wb")
     pickle.dump(config_dict, a_file)
     a_file.close()
 
-   # train discriminator
+   # feature selection
+    big_scaler = StandardScaler()
     df = pd.read_csv("all_sigmas_df_comb.csv")
-    X, y = df.iloc[:, :-4], df.iloc[:, -1] 
+    df_scaled = big_scaler.fit_transform(df.iloc[:, :-4])
+    X = pd.DataFrame(df_scaled)
+    X.columns = df.iloc[:, :-4].columns.values
+    y = df.iloc[:, -1] 
     model = SVR(kernel='rbf')
-    X_reduc = backward_elim(X, y, 3)
-    model = model.fit(X_reduc, y)
+    X_reduce = backward_elim(X, y, 1)
+    
+    # train discriminator
+    X_train = df[X_reduce.columns.values]
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_train = pd.DataFrame(X_train)
+    model = model.fit(X_train, y)
 
     # get features from backward elimination
-    cols = X_reduc.columns.values
+    cols = X_reduce.columns.values
     print(cols)
-    sigmas = [int(''.join(filter(str.isdigit, item))) for item in X_reduc.columns.values]
+    sigmas = [int(''.join(filter(str.isdigit, item))) for item in X_reduce.columns.values]
     uniq_sigs = sorted(list(set(sigmas)))
     f_density = lambda x: str(x) + "_density"
     f_grad = lambda x: str(x) + "_grad"
@@ -238,19 +242,20 @@ if __name__ == '__main__':
     im_init.save(os.path.join(save_dir, "init_seed" + str(seed) + "_" + str(log_time) + ".png"))
 
     log = []
+    
+    curr_score, preds, weights = evaluate(im, centroids)
+
     # run simulated annealing
     for iter in tqdm(range(niter)):
+        
+        new_im, new_centroids, sim_score, preds, new_weights = simulate(im, centroids, weights)
 
-        curr_score, weights = evaluate(im, centroids)
+        if sim_score > curr_score:
+            im, centroids, curr_score, weights = new_im, new_centroids, sim_score, new_weights
+        
+        log.append((curr_score, sim_score, centroids, preds))
 
-        new_im, new_centroids, new_score = simulate(im, centroids, weights)
-
-        log.append((curr_score, new_score, centroids))
-
-        if new_score > curr_score:
-            im, centroids, curr_score = new_im, new_centroids, new_score
-
-    # save log and final image
+    # save log and final 
     with open(os.path.join(save_dir, "log" + str(seed) + "_" + str(log_time) + ".txt"), "wb") as fp: 
         pickle.dump(log, fp)
 
