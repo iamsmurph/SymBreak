@@ -12,6 +12,9 @@ dir = "random12_design_v2"
 initPattern = np.load("datasets/" + dir + "/designRandom" + str(expNum) + ".npy")
 finalPattern = np.load("datasets/" + dir + "/coordsRewardRandom" + str(expNum) + ".npy")
 
+assert(initPattern is not None)
+assert(finalPattern is not None)
+
 # instantiate preprocessing class with save dir path
 p = preprocessing.Alignment(dir)
 

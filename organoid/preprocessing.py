@@ -7,7 +7,6 @@ import re
 
 class Alignment:
     _closedWindows = 0
-
     # color pattern to be used
     colors = ['m','g','b','y','r']
     
@@ -228,17 +227,106 @@ class Alignment:
             localities.append(np.append(locality.flatten(), rewards[ix]))
             
         return localities
+    
+    def removal(self, initCoords, finalCoords):
+
+        initNum = len(initCoords)
+        finalNum = len(finalCoords)
+
+        if initNum == finalNum:
+            print("Move on to matching step")
+        elif initNum > finalNum:
+            print("Remove from init, holding final fixed")
+            new_initCoords = self._removeCentroids(finalCoords, initCoords)
+            return new_initCoords, finalCoords
+        else:
+            print("Remove from final, holding init fixed")
+            new_finalCoords = self._removeCentroids(initCoords, finalCoords)
+            return initCoords, new_finalCoords
+
+       
+        '''DataLog = []
+        figRm = plt.figure()
+        for i, (x,y) in enumerate(zip(X,Y)):
+            plt.scatter(x, y, c = 'b', picker=5)
+        def onclick_remove(event):
+            event.artist.remove()
+            figRm.canvas.draw()
+            data = np.frombuffer(figRm.canvas.tostring_rgb(), dtype=np.uint8)
+            data = data.reshape(figRm.canvas.get_width_height()[::-1] + (3,))
+            DataLog.append(data)
+            plt.savefig(os.path.join(self.saveDir, "outputFig.png"), bbox_inches=0, pad_inches = 0)
+        cid = figRm.canvas.mpl_connect('pick_event', onclick_remove)
+        plt.show()'''
+        
+
+    def _removeCentroids(self, refCoords, coordsToRemove): # add colors later?
+        # Manually annotate to align color coding of two input patterns
+        X = coordsToRemove[:,0]
+        Y = coordsToRemove[:,1]
+        xyVec = np.array([X,Y]).T
+        numCoords = len(X)
+        #self._colorVec = colors.copy()
+        removeLog = []
+
+        refFig = plt.figure(1)
+        plt.scatter(refCoords[:,0], refCoords[:,1]) # , c = colors
+        plt.title("REFERENCE IMAGE")
+
+        fig = plt.figure(2, figsize=(8,8))
+        for i, (x,y) in enumerate(zip(X,Y)):
+            plt.scatter(x, y,  picker=5) #c = colors[i],
+
+        def onclick_remove(event):
+            event.artist.remove()
+
+            # get click location
+            xclick = np.round(event.mouseevent.xdata,3)
+            yclick = np.round(event.mouseevent.ydata, 3)
+            clickCoord = np.array((xclick, yclick))
+
+            print('Removing organoid from location: {},{}'.format(xclick, yclick))
+
+            # find index of closest centroid
+            clickVec = np.tile(clickCoord, (numCoords, 1))
+            diff = clickVec - xyVec
+            sumSqDiff = np.sum(diff*diff, axis=1)
+            ix = np.argmin(sumSqDiff)
+            removeLog.append(ix)
+
+            fig.canvas.draw()
+
+        def on_close(event):
+            figNum = event.canvas.figure.number
+            print("Figures {} has been closed.".format(figNum))
+            self._closedWindows += 1
+
+        cid = fig.canvas.mpl_connect('pick_event', onclick_remove)
+        refFig.canvas.mpl_connect('close_event', on_close)
+        fig.canvas.mpl_connect('close_event', on_close)
+        plt.axis('off')
+        plt.show()
+
+        # if both windows close, end return annotation
+        if self._closedWindows == 2:
+            print("Exiting removal...")
+            newCoords = coordsToRemove.copy()
+            newCoords = np.delete(newCoords, removeLog, axis = 0)
+            self._closedWindows = 0
+            return newCoords
+
 
     def matching(self, initCoords, finalCoords, searchLen, normScalar, validation = False):
         # main function for matching two patterns
 
-        assert(initCoords.shape[0] == finalCoords.shape[0])
+        assert(len(initCoords) == len(finalCoords))
         
         dir_path = os.getcwd()
         saveDir = os.path.join(dir_path, "datasets", self.saveDir)
         if not os.path.exists(saveDir):
             os.makedirs(saveDir)
 
+        # if true, save images to a validation directory to be checked manually
         if validation:
             valDir = os.path.join(saveDir, "validationIms_" + self.saveDir)
             if not os.path.exists(valDir):
@@ -248,10 +336,8 @@ class Alignment:
 
         initGrpCoords, finalGrpCoords, colors = self._initColors(initCoords, finalCoords, yValCnts)
 
-        assert(initGrpCoords.shape[0] == finalGrpCoords.shape[0] == len(colors))
-
+        assert(len(initGrpCoords) == len(finalGrpCoords) == len(colors))
         annotColors = self._fixColors(initGrpCoords, finalGrpCoords, colors)
-
         correctedFinalCoords = np.array(self._updateFinalCoords(finalGrpCoords, colors, annotColors, list(yValCnts)))
 
         if validation:
