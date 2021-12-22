@@ -3,3 +3,4 @@ __pycache__/
 wandb/
 datasets_archive/
 scripting/
+lightning_logs/
