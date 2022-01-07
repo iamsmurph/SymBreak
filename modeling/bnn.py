@@ -14,7 +14,7 @@ from blitz.utils import variational_estimator
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_squared_error
 
 from tqdm import tqdm
 import wandb
@@ -22,15 +22,17 @@ import pickle
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+round0_dir = "datasets/round_0/combined/round0_only_train.csv"
+round1_dir = "datasets/round_1/combined/train_cumulative.csv"
+cum_dir = "datasets/round_1/combined/round1_only_train.csv"
 ####### DATA HANDLING #######
-config = dict(data_dir = "datasets/round_1/round_1_feats_metrics/round1_cumulative_train.csv", 
+config = dict(data_dir = cum_dir, 
                 input_size = 10, 
                 output_size = 1, 
                 epochs = 500, 
                 batch_size = 64, 
                 learning_rate = 1e-3, 
-                test_size = .2, 
+                test_size = .1, 
                 train_shuff = True, 
                 test_shuff = False)
 
@@ -42,7 +44,7 @@ def get_data(data_dir, test_size):
     X, y = labeled_df.iloc[:, :-1], labeled_df.iloc[:, -1]
     scale = StandardScaler()
     X = scale.fit_transform(X)
-    pickle.dump(scale, open("modeling/torch_models/bnn_scaler.pkl", "wb"))
+    #pickle.dump(scale, open("modeling/torch_models/bnn_scaler.pkl", "wb"))
     y = np.expand_dims(y, -1)
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size)
@@ -149,12 +151,12 @@ def test(model, loader):
     # Run the model on some test examples
     with torch.no_grad():
         cnt = 0
-        mae_scores = 0
+        mse_scores = 0
         for datapoints, labels in loader:
             means = sample_prediction(model, datapoints) #torch.Tensor(Xtest_scaled).float()
-            mae_score = mean_absolute_error(means.detach().numpy(), labels.detach().numpy())
-            mae_scores += mae_score
-            wandb.log({"test batch loss": mae_score})
+            mse_score = mean_squared_error(means.detach().numpy(), labels.detach().numpy())
+            mse_scores += mse_score
+            wandb.log({"test batch loss": mse_score})
             
 ####### RUN #########
 def make(config):
@@ -189,4 +191,4 @@ def model_pipeline(hyperparameters):
 
 if __name__=="__main__":
     model = model_pipeline(config)
-    torch.save(model.state_dict(), "modeling/torch_models/bnn")
+    #torch.save(model.state_dict(), "modeling/torch_models/bnn")
