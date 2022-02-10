@@ -1,6 +1,7 @@
 __pycache__/
 .ipynb_checkpoints
-wandb/
+datasets/
 datasets_archive/
-scripting/
 lightning_logs/
+scripting/
+wandb/

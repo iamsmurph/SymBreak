@@ -1,72 +1,88 @@
 import numpy as np
+import pandas as pd
 import cupy as cp
 from cupyx.scipy import ndimage
-import argparse
-import cv2
-import os
-import matplotlib.pyplot as plt
+import pickle
+from tqdm import tqdm
 
-def extract_features(image, sigma, centroids, org_rad):
+# version with organoid left out 
+def one_out_mask(out_ix, centroids, x_size, y_size, org_rad = 75):
+    mask = np.zeros((x_size, y_size))
+    for i, (c1, c2) in enumerate(centroids):
+        if i != out_ix:
+            x = int(c2)
+            y = int(c1)
+            mask[x-org_rad:x+org_rad, y-org_rad:y+org_rad] = 255
+    return mask
 
-    im_blur = ndimage.gaussian_filter(cp.array(image), sigma=sigma, mode='constant',cval=0)
-    im_blur_norm=im_blur*sigma*cp.sqrt(np.pi)
+def max_gradient(localIm, org_rad, name=None):
+    x, y = 75, 75 
 
-    plt.imshow(im_blur_norm.get())
-    plt.savefig("yerr" + str(np.random.choice(2000)))
+    xmax = localIm[x + org_rad - 1, y]
+    xmin = localIm[x - org_rad, y]
+    ymax = localIm[x, y + org_rad - 1]
+    ymin = localIm[x, y - org_rad]
 
-    im_sx = ndimage.sobel(im_blur_norm, axis=1, mode='reflect')
-    im_sy = ndimage.sobel(im_blur_norm, axis=0, mode='reflect')
-    im_sobel=np.hypot(im_sx, im_sy)
+    xdiffnorm  = (xmax - xmin)/(2*org_rad)
+    ydiffnorm = (ymax - ymin)/(2*org_rad)
 
-    feats = []
-   
-    for centroid in centroids:
-        x, y = centroid[0], centroid[1]
-        density = np.mean(im_blur_norm[x-org_rad: x+org_rad, y-org_rad: y+org_rad])
-        if np.isnan(density):
-            print(x,y)
-        assert(~np.isnan(density))
-        grad = np.mean(im_sobel[x-org_rad: x+org_rad, y-org_rad: y+org_rad])
-        assert(~np.isnan(grad))
-        feats.append([density.get(), grad.get()])
+    grad = np.sqrt(xdiffnorm**2 + ydiffnorm**2)
+    gradVec = np.array((xdiffnorm, ydiffnorm))
+                   
+    return grad, gradVec
 
-    cp._default_memory_pool.free_all_blocks()
-
-    feats = np.array(feats)
-    print(feats.shape)
-    return feats
-
-if __name__=="__main__":
-    matchPath = "datasets/round_1/round_1_match_data/"
-    phenoPath = "datasets/round_1/round_1_phenotypes/"
-
-    match_fs = os.listdir(matchPath)
-    pheno_fs = os.listdir(phenoPath)
-    match_fs = sorted(match_fs, key=lambda x: int(x[-5]))
-    pheno_fs = sorted(pheno_fs, key=lambda x: int(x[-6]))
-    print(match_fs)
-    print(pheno_fs)
-    all_feats = []
-    sigmas = [200, 400, 600, 800, 1000]
-
-    big_df = []
-    #assert(True == False)
-    for match_f, pheno_f in zip(match_fs, pheno_fs):
-        feats_subdf = []
-        for sigma in sigmas:
-            print("Extracting features for "+match_f+" and "+pheno_f+" for sigma "+str(sigma))
-            img = cv2.imread(os.path.join(phenoPath, pheno_f), 0).astype(np.float64)
-            img_resize = cv2.resize(img, (8400,8400), interpolation = cv2.INTER_AREA)
-            centroids = np.load(os.path.join(matchPath, match_f))
-            centroids = centroids[:, -2:]
-            feats = extract_features(img_resize, sigma, centroids, 75)
-            feats_subdf.append(feats)
-            
-        name = np.repeat(int(match_f[-5]), len(feats_subdf[0])).reshape(-1,1)
-        subdf = np.hstack(feats_subdf)
-        info = np.append(centroids, name, axis = 1)
-        df = np.append(subdf, info, axis = 1)
-        big_df.append(df)
+def extract_features(sigma, centroids, pad=500, org_rad=75):
+    
+    max_coord = int(np.max(centroids))
+    min_coord = int(np.min(centroids))
+    
+    x_size, y_size = max_coord + min_coord + pad*2, max_coord + min_coord + pad*2
+    
+    dCentroids_scaled = centroids+pad
+    
+    grads = []
+    gradVecs = []
+    for i, (c1, c2) in enumerate(dCentroids_scaled):
+        x = int(c2)
+        y = int(c1)
+        one_out = one_out_mask(i, dCentroids_scaled, x_size, y_size)
         
+        im = cp.array(one_out)
+        im_blur = ndimage.gaussian_filter(im, sigma=sigma, mode = 'constant')
 
-    np.save('round_1_features.npy', np.vstack(big_df))
+        dfeats = im_blur[x-org_rad:x+org_rad, y-org_rad:y+org_rad]
+        
+        grad, gradVec = max_gradient(dfeats.get(), org_rad)
+        
+        grads.append(grad)
+        gradVecs.append(gradVec)
+      
+    return grads, gradVecs
+
+if __name__ == "__main__":
+    df_round1_1 = pd.read_csv("datasets/round_1/combined/big_df1.csv")
+    df_round1_2 = pd.read_csv("datasets/round_1/combined/big_df2.csv")
+    df_round1_3 = pd.read_csv("datasets/round_1/combined/big_df3.csv")
+    df_round1_4 = pd.read_csv("datasets/round_1/combined/big_df4.csv")
+    df_round1_5 = pd.read_csv("datasets/round_1/combined/big_df5.csv")
+    df_round1_6 = pd.read_csv("datasets/round_1/combined/big_df6.csv")
+    designs = [df_round1_1, df_round1_2, df_round1_3, df_round1_4, df_round1_5, df_round1_6]
+
+    sigmas = [100, 200, 300, 400, 500]
+
+    round1_grads = []
+    round1_gradVecs = []
+    for sigma in tqdm(sigmas):
+        sigma_grads = []
+        sigma_gradVecs = []
+        for df in designs: 
+            coords = np.vstack([df.dx.values, df.dy.values]).T
+            grads, gradVecs = extract_features(sigma, coords)
+            sigma_grads.append(grads)
+            sigma_gradVecs.append(gradVecs)
+        round1_grads.append(sigma_grads)
+        round1_gradVecs.append(sigma_gradVecs)
+
+    pickle.dump(round1_grads, open("round1_grads.txt", "wb"))
+
+    pickle.dump(round1_gradVecs, open("round1_gradVecs.txt", "wb"))
