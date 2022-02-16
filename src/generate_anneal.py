@@ -170,12 +170,19 @@ def evaluate(im_pattern, centroids):
     model_feats_scaled = scaler.transform(model_feats)
     preds = model.predict(model_feats_scaled)
 
-    reward = np.min(preds)
-    # Alternative: preds.mean() - np.abs(np.max(preds) - np.min(preds))
-    # Alternative: preds.mean() - np.sqrt(np.var(preds))
-    # Alternative: preds.mean()
+    reward = reward_fn(preds, run.config.objective, run.config.lmbda)
 
     return reward, preds, model_feats_scaled
+
+def reward_fn(preds, objective, lmbda = None):
+    if objective == "min":
+        return np.min(preds)
+    elif objective == "mean":
+        return np.mean(preds)
+    else:
+        assert(lmbda != None)
+        return np.mean(preds) + lmbda*np.min(preds)
+    
 
 def generate_image():
    # print("Starting stochastic pattern generation...")
@@ -201,14 +208,14 @@ def generate_image():
             x, y = random_location(mask)
             test_cents.append((x,y))
             test_mask = draw_circle(x,y, test_mask, run.config.org_rad, fill=True)
-            objective, _, _ = evaluate(test_mask, test_cents)
-            sim_organoids.append((objective, x, y))
+            score, _, _ = evaluate(test_mask, test_cents)
+            sim_organoids.append((score, x, y))
         
         # select best simulated organoid
         best_sim_organoid = sorted(sim_organoids)[-1]
         newx, newy = best_sim_organoid[1], best_sim_organoid[2]
+        mask = draw_circle(newx, newy, mask, run.config.org_rad, fill = True)
         centroids.append((newx, newy))
-        mask = draw_circle(x,y, mask, run.config.org_rad, fill = True)
 
     # add the pad at the end
     gen_pattern = np.pad(mask, run.config.pad)
@@ -250,22 +257,22 @@ if __name__ == '__main__':
                     pad = 500,
                     org_rad = 75,
                     org_pad = 25,
-                    snapshot_step = 10,
-                    min_dist = 75+2*25,
-                    c_to_c_dist = 2*75+2*25,
+                    snapshot_step = 100,
+                    min_dist = 75+2*1,
+                    c_to_c_dist = 2*75+2*1,
+                    objective = "min",
+                    lmbda = None,
                     # seq gen configs
                     n_init_orgs = 1, 
-                    n_total_orgs = 6,
+                    n_total_orgs = 8,
                     n_search = 30,
                     size = 2000, 
                     # sim anneal configs
-                    niter = 1000,
+                    niter = 2000,
                     move_len = 80,
-                    move_decay = .9988,
+                    move_decay = .9991,
                     random_perturb = 1/5,
-                    perturb_decay = .9975) 
-
-    run = wandb.init(project="organoid_annealing", config=config) # mode="disabled"
+                    perturb_decay = .9977) 
 
     # Get GPU index from user
     cp.cuda.Device(int(sys.argv[1])).use()
@@ -280,16 +287,22 @@ if __name__ == '__main__':
     y = combined_df.cdx2Dipole.values
     model = KernelRidge(kernel="rbf").fit(X, y)
 
-    # image generation
-    im, centroids = generate_image()
-    wandb.log({"seq_gen_array": wandb.Image(im.astype(np.uint8)),
-            "seq_gen_centroids": wandb.Table(data = pd.DataFrame(centroids, columns=["x","y"]))})
-    
-    # sim annealing
-    new_im, new_centroids, log = sim_anneal(im, centroids.tolist())
-    wandb.log({"anneal_array": wandb.Image(new_im.astype(np.uint8)),
-               "anneal_centroids": wandb.Table(data = pd.DataFrame(new_centroids, columns=["x","y"]))})
-    
-    # save larger files manually in run
-    pickle.dump(log, open(os.path.join(run.dir,"anneal_log.txt"), "wb"))
-    run.finish()
+    for n_orgs in [5,6,7]: 
+        for i in range(3):
+            run_name = "norgs%d_rep%d_%dsteps_no_barriers" % (n_orgs, i+1, 2000)
+            run = wandb.init(project="organoid_annealing", id=run_name, config=config) # mode="disabled"
+            run.config.update({"n_total_orgs": n_orgs}, allow_val_change=True)
+
+            # image generation
+            im, centroids = generate_image()
+            wandb.log({"seq_gen_array": wandb.Image(im.astype(np.uint8)),
+                    "seq_gen_centroids": wandb.Table(data = pd.DataFrame(centroids, columns=["x","y"]))})
+
+            # sim annealing
+            new_im, new_centroids, log = sim_anneal(im, centroids.tolist())
+            wandb.log({"anneal_array": wandb.Image(new_im.astype(np.uint8)),
+                    "anneal_centroids": wandb.Table(data = pd.DataFrame(new_centroids, columns=["x","y"]))})
+
+            # save larger files manually in run
+            pickle.dump(log, open(os.path.join(run.dir,"anneal_log.txt"), "wb"))
+            run.finish()
