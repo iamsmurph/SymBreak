@@ -116,7 +116,7 @@ if uploaded_file is not None:
     centroids = pd.read_csv(uploaded_file).values.astype(int)
     
     org_rad = 75
-    model_path = "knn_model.checkpoint"
+    model_path = "models/knn_model.checkpoint"
 
     #centroids = pd.read_csv("test_coords.csv").values[:20].astype(int)
     centroids = centroids
