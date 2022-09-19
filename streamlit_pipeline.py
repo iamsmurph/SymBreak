@@ -17,16 +17,6 @@ def get_features(mask, centroids):
         # generate pattern
         st.text("Generating patterns...    ")
         im = make_pattern(mask, centroids, fillVal = 255)
-        
-        #print("Generating pattern...")
-        #for x,y in tqdm(centroids):
-        #    dim = len(mask)
-        #    xx, yy = np.mgrid[:org_rad*2, :org_rad*2]
-        #    zz = (xx - org_rad) ** 2 + (yy - org_rad) ** 2
-        #    circle = zz < org_rad ** 2
-        #    bool_mat = np.pad(circle, ((x-org_rad, dim-x-org_rad),(y-org_rad, dim-y-org_rad)))
-        #    mask[bool_mat] = 255
-        #im = mask
         st.text("Done.")
         
         st.text("Gaussian blurring...")
@@ -123,16 +113,13 @@ size = int(size)
 
 if uploaded_file is not None:
     # Can be used wherever a "file-like" object is accepted:
-    centroids = pd.read_csv(uploaded_file).values[:20].astype(int)
-    
-    #st.write(centroids, width = 100)
-    #st.write("yo ", size)
+    centroids = pd.read_csv(uploaded_file).values.astype(int)
     
     org_rad = 75
     model_path = "knn_model.checkpoint"
 
     #centroids = pd.read_csv("test_coords.csv").values[:20].astype(int)
-    centroids = centroids // 4
+    centroids = centroids
     mask = np.zeros((size, size))
     feats = get_features(mask,centroids)
 
