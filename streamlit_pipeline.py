@@ -9,8 +9,6 @@ import pickle
 from sklearn.preprocessing import MinMaxScaler
 import io
 
-#import matplotlib.image as image
-
 st.title("Machine learning directed organoid morphogenesis")
 
 def get_features(mask, centroids):
