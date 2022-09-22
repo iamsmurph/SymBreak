@@ -107,13 +107,11 @@ uploaded_file = st.file_uploader("Upload organoid coordinates (.csv format):")
 size = int(size)
 
 if uploaded_file is not None:
-    # Can be used wherever a "file-like" object is accepted:
-    centroids = pd.read_csv(uploaded_file).values[:40].astype(int)
+    centroids = pd.read_csv(uploaded_file).values.astype(int)
     
     org_rad = 75
     model_path = "models/knn_model.checkpoint"
 
-    centroids = centroids // 4
     mask = np.zeros((size, size))
     feats = get_features(mask,centroids)
 
