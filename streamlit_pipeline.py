@@ -52,7 +52,6 @@ def compute_feats(im, im_blur, centroids, rho = True, grad_rho = True):
             
 
 def max_gradient(x,y, im_blur):
-
     # get pixel intensities in extremes
     xmax = im_blur[x + org_rad - 1, y]
     xmin = im_blur[x - org_rad, y]
@@ -69,9 +68,7 @@ def max_gradient(x,y, im_blur):
     return grad, gradVec
 
 def make_pattern(mask, centroids, fillVal = 255):
-    n = len(centroids)
-    for i in tqdm(range(n)):
-        x,y = centroids[i]
+    for x,y in centroids:
         dim = len(mask)
         xx, yy = np.mgrid[:org_rad*2, :org_rad*2]
         zz = (xx - org_rad) ** 2 + (yy - org_rad) ** 2
@@ -111,13 +108,12 @@ size = int(size)
 
 if uploaded_file is not None:
     # Can be used wherever a "file-like" object is accepted:
-    centroids = pd.read_csv(uploaded_file).values.astype(int)
+    centroids = pd.read_csv(uploaded_file).values[:40].astype(int)
     
     org_rad = 75
     model_path = "models/knn_model.checkpoint"
 
-    #centroids = pd.read_csv("test_coords.csv").values[:20].astype(int)
-    centroids = centroids
+    centroids = centroids // 4
     mask = np.zeros((size, size))
     feats = get_features(mask,centroids)
 
@@ -127,7 +123,10 @@ if uploaded_file is not None:
     loaded_model = pickle.load(open(model_path, 'rb'))
     preds = loaded_model.predict(X)
     preds = preds.reshape(-1, 1)
-    res_arr = np.hstack([centroids, feats, preds])
+    scaler = MinMaxScaler(feature_range=(0,1))
+    preds_norm = scaler.fit_transform(preds)
+
+    res_arr = np.hstack([centroids, feats, preds_norm])
     cols = ["cx", "cy","density_700","grad_200","pred"]
     res_df = pd.DataFrame(res_arr, columns = cols)
     @st.cache
@@ -145,13 +144,10 @@ if uploaded_file is not None:
         key='download-csv'
     )
 
-    #res_df.to_csv("result_df.csv", index = False)
     st.subheader("Prediction Plot")
     mask = np.zeros((size, size))
-    scaler = MinMaxScaler(feature_range=(0,1))
-    preds_norm = scaler.fit_transform(preds)
     res_plot = make_plot(mask, centroids, preds_norm)
-    #image.imsave('result.png', hi)
+
     fig, ax = plt.subplots()
     im = ax.imshow(res_plot)
     plt.colorbar(im)
@@ -164,8 +160,8 @@ if uploaded_file is not None:
     st.pyplot(fig)
     
     btn = st.download_button(
-    label="Download",
-    data=img,
-    file_name=fn,
-    mime="image/png"
+        label="Download",
+        data=img,
+        file_name=fn,
+        mime="image/png"
     )
