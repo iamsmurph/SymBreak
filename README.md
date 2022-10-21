@@ -1,4 +1,3 @@
-# MLOM: Machine Learning Guided Organoid Morphogenesis
-Controlled spatial coupling of organoids leads to A-P elongation.
+# Machine Learning Guided Morphogenesis
 
-### TO DO: Tutorial
+### TO DO
