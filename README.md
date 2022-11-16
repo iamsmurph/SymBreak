@@ -1,3 +1,3 @@
-# Machine Learning Guided Morphogenesis
+# Morph
 
 ### TO DO
