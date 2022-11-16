@@ -110,7 +110,7 @@ if uploaded_file is not None:
     centroids = pd.read_csv(uploaded_file).values.astype(int)
     
     org_rad = 75
-    model_path = "models/knn_model.checkpoint"
+    model_path = "models/krr_model.checkpoint"
 
     mask = np.zeros((size, size))
     feats = get_features(mask,centroids)
