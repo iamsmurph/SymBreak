@@ -1,4 +1,4 @@
-import streamlit as st
+#import streamlit as st
 import pandas as pd
 import numpy as np
 import time
@@ -7,43 +7,42 @@ from tqdm import tqdm
 from scipy import ndimage
 import pickle
 from sklearn.preprocessing import MinMaxScaler
-import io
+import argparse
+import cv2
+import time
+from imageio import imwrite
+from PIL import Image
 
-st.title("OrgSym")
-
-st.markdown("Please input the coordinates of the organoids to be optimized.")
 
 def get_features(mask, centroids):
         # generate pattern
-        msg = st.empty()
-        msg.markdown("Generating patterns...")
-        im = make_pattern(mask, centroids, fillVal = 255)
-        msg.markdown("Done")
+        print("Generating patterns...", end="")
+        im = make_pattern(mask, centroids, fillVal = 255).astype(np.uint8)
+        print("Done")
+        #im = Image.fromarray(im)
+        #yo = data.astronaut()
+        #breakpoint()        
         
-        msg = st.empty()
-        msg.markdown("Gaussian blurring...")
+        print("Gaussian blurring...")
         im_blurs = []
-        my_bar = st.progress(10)
         sigmas = [200, 700]
-        for i, sigma in enumerate(sigmas): #tqdm
-            blur = ndimage.gaussian_filter(im, sigma=sigma, mode = 'constant')
+        for sigma in tqdm(sigmas):
+            #im = np.asarray(im)
+            #start = time.time()
+            #blur1 = cv2.GaussianBlur(im, (0, 0), sigma, sigma)
+            #end = time.time()
+            #print(end - start)
+            #cv2.imwrite(f"cv2_test_im_{sigma}.jpg", blur1)   
+            blur = ndimage.gaussian_filter(im, sigma=sigma) #, mode = 'constant'
             im_blurs.append(blur)
-            percent_done = int(((i+1)/len(sigmas)))*100
-            my_bar.progress(percent_done)
-        msg.markdown("Done")
+        #breakpoint()
 
-        msg = st.empty()
-        msg.markdown("Computing features...")
-        my_bar = st.progress(10)
+        print("Computing features...", end="")
         grad_rho200 = compute_feats(im, im_blurs[0], centroids, rho = False)
-        my_bar.progress(50)
         rho700 = compute_feats(im, im_blurs[1], centroids, grad_rho = False)
-        my_bar.progress(100)
-        msg.markdown("Done")
-
         feats = np.array(list(zip(rho700, grad_rho200)))
+        print("Done")
         return feats
-
         
 def compute_feats(im, im_blur, centroids, rho = True, grad_rho = True):
     feats = []
@@ -70,8 +69,8 @@ def max_gradient(x,y, im_blur):
     ymax = im_blur[x, y + org_rad - 1]
     ymin = im_blur[x, y - org_rad]
 
-    xdiffnorm  = ((xmax - xmin) / org_rad)
-    ydiffnorm = ((ymax - ymin) / org_rad)
+    xdiffnorm  = ((int(xmax) - int(xmin)) / org_rad)
+    ydiffnorm = ((int(ymax) - int(ymin)) / org_rad)
 
     # gradient magnitude and vector
     grad = np.array(np.sqrt(xdiffnorm**2 + ydiffnorm**2))
@@ -114,17 +113,19 @@ def circle(x,y, orgIm, radius, fill = False, fillVal = 255):
     else:
         return bool_mat
 
-#size = st.number_input('Input mask size:')
-uploaded_file = st.file_uploader("Upload organoid coordinates (.csv format):")
-#size = int(size)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f")
+    parser.add_argument("--save_csv", action='store_true')
+    parser.add_argument("--save_img", action='store_true')
+    args = parser.parse_args()
 
-if uploaded_file is not None:
-    centroids = pd.read_csv(uploaded_file).values.astype(int)
+    centroids = pd.read_csv(args.f).values.astype(int)
     
     org_rad = 75
+    pad = 1000
     model_path = "models/krr_model.checkpoint"
 
-    pad = 1000
     cmin = centroids.min()
     if cmin != pad:
         diff = pad - cmin
@@ -143,42 +144,18 @@ if uploaded_file is not None:
     scaler = MinMaxScaler(feature_range=(0,1))
     preds_norm = scaler.fit_transform(preds)
 
-    arr = np.hstack([centroids, feats, preds_norm])
-    cols = ["cx", "cy","density_700","grad_200","pred"]
-    res_df = pd.DataFrame(arr, columns = cols)
-    @st.cache
+    if args.save_csv:
+        arr = np.hstack([centroids, feats, preds_norm])
+        cols = ["cx", "cy","density_700","grad_200","pred"]
+        res_df = pd.DataFrame(arr, columns = cols)
+        res_df.to_csv("res_df.csv", index=False)
     
-    def convert_df(df):
-        return df.to_csv().encode('utf-8')
-    st.subheader("Prediction Table")
-    csv = convert_df(res_df)
-    st.write(res_df)
-    st.download_button(
-        "Download",
-        csv,
-        "result_table.csv",
-        "text/csv",
-        key='download-csv'
-    )
-
-    st.subheader("Prediction Plot")
-    mask = np.zeros((size, size))
-    res_plot = make_plot(mask, centroids, preds_norm)
-
-    fig, ax = plt.subplots()
-    im = ax.imshow(res_plot)
-    plt.colorbar(im)
-    plt.title("Dipole Prediction Plot")
-    
-    fn = 'result_plot.png'
-    img = io.BytesIO()
-    plt.savefig(img, format='png')
-
-    st.pyplot(fig)
-    
-    btn = st.download_button(
-        label="Download",
-        data=img,
-        file_name=fn,
-        mime="image/png"
-    )
+    if args.save_img:
+        mask = np.zeros((size, size))
+        res_plot = make_plot(mask, centroids, preds_norm)
+        fig, ax = plt.subplots()
+        im = ax.imshow(res_plot)
+        plt.colorbar(im)
+        plt.title("Dipole Prediction Plot")
+        fn = 'result_plot.png'
+        plt.savefig(fn, format='png')

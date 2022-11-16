@@ -160,12 +160,14 @@ def get_weights(arr, weights):
 def evaluate(im_pattern, centroids):
     new_feats = []
     
+    model_sigmas = [200, 700]
     for sigma in model_sigmas:
         feats = extract_features(im_pattern, sigma, centroids)
         new_feats.append(feats[:, 0].reshape(-1,1))
         new_feats.append(feats[:, 1].reshape(-1,1))
 
     new_feats = np.hstack(new_feats)
+    feats_ixs = np.array([0,1,1,0]).astype(np.bool8)
     model_feats = new_feats[:, feats_ixs]
     model_feats_scaled = scaler.transform(model_feats)
     preds = model.predict(model_feats_scaled)
@@ -278,8 +280,6 @@ if __name__ == '__main__':
     cp.cuda.Device(int(sys.argv[1])).use()
 
     # load model and scaler
-    model_sigmas = [200, 700]
-    feats_ixs = np.array([0,1,1,0]).astype(np.bool8)
     combined_df = pd.read_csv("datasets/round_1/combined/circle_combined_df.csv")
     feats_df = combined_df[['grad200','density700']]
     scaler = MinMaxScaler()
@@ -289,8 +289,8 @@ if __name__ == '__main__':
 
     for n_orgs in [5,6,7]: 
         for i in range(3):
-            run_name = "norgs%d_rep%d_%dsteps_no_barriers" % (n_orgs, i+1, 2000)
-            run = wandb.init(project="organoid_annealing", id=run_name, config=config) # mode="disabled"
+            run_name = f"norgs{n_orgs}_rep{i+1}_{2000}steps_no_barriers" % (n_orgs, i+1, 2000)
+            run = wandb.init(project="organoid_annealing", id=run_name, config=config) 
             run.config.update({"n_total_orgs": n_orgs}, allow_val_change=True)
 
             # image generation
