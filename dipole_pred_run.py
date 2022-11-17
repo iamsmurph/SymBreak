@@ -19,9 +19,6 @@ def get_features(mask, centroids):
         print("Generating patterns...", end="")
         im = make_pattern(mask, centroids, fillVal = 255).astype(np.uint8)
         print("Done")
-        #im = Image.fromarray(im)
-        #yo = data.astronaut()
-        #breakpoint()        
         
         print("Gaussian blurring...")
         im_blurs = []
@@ -148,7 +145,7 @@ if __name__ == "__main__":
         arr = np.hstack([centroids, feats, preds_norm])
         cols = ["cx", "cy","density_700","grad_200","pred"]
         res_df = pd.DataFrame(arr, columns = cols)
-        res_df.to_csv("res_df.csv", index=False)
+        res_df.to_csv("results/result_df_dipole_preds.csv", index=False)
     
     if args.save_img:
         mask = np.zeros((size, size))
@@ -157,5 +154,5 @@ if __name__ == "__main__":
         im = ax.imshow(res_plot)
         plt.colorbar(im)
         plt.title("Dipole Prediction Plot")
-        fn = 'result_plot.png'
+        fn = 'results/result_plot_dipole_preds.png'
         plt.savefig(fn, format='png')

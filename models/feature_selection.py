@@ -14,8 +14,6 @@ df = pd.read_csv("circle_combined_df_big.csv")
 
 X = df.iloc[:, 5:-1]
 y = df.iloc[:, -1]
-#y_ep = y + 1e-6
-#y_ep_log = np.log(y_ep)
 
 estimator = KernelRidge(kernel="rbf")
 results = []
@@ -25,7 +23,6 @@ for n in tqdm(range(1, 4)):
     sfs.fit(X, y)
     
     select_df = X.loc[:, sfs.get_support()]
-
     cols = select_df.columns
     
     scores = cross_val_score(estimator, select_df, y, cv=5, scoring="neg_root_mean_squared_error")
