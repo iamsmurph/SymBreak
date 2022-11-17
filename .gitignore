@@ -6,4 +6,3 @@ lightning_logs/
 scripting/
 wandb/
 .DS_Store
-.gitignore
