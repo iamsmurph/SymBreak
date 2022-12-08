@@ -4,31 +4,30 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from scipy import ndimage
 import pickle
-from sklearn.preprocessing import MinMaxScaler
-import argparse
 import os
-import torch
 from PIL import Image
-#import cupyx.scipy.ndimage.gaussian_filter 
+import sklearn
 
 class SymBreak:
     def __init__(self, 
-            data_path,
-            save_path,
-            save_plots,
+            data_path = "data/smaller_example_coords.csv",
+            save_path = "results/",
+            save_plots = True,
             pad = 700, # padding in microns
             org_rad = 75, # organoid radius in microns
+            model_path = "models/krr_model.pkl",
+            scaler_path = "models/scaler.pkl"
         ):
         self.data_path = data_path
         self.save_path = save_path
         self.save_plots = save_plots
         self.pad = pad
         self.org_rad = org_rad
+        self.model_path = model_path
+        self.scaler_path = scaler_path
 
-        model_path = "models/krr_model.pkl"
-        scaler_path = "models/scaler.pkl"
-        loaded_model = pickle.load(open(model_path, 'rb'))
-        loaded_scaler = pickle.load(open(scaler_path,'rb'))
+        loaded_model = pickle.load(open(self.model_path, 'rb'))
+        loaded_scaler = pickle.load(open(self.scaler_path,'rb'))
 
         centroids = pd.read_csv(self.data_path, header=None).values.astype(int)
         self.centroids = self.shift(centroids)
@@ -36,11 +35,13 @@ class SymBreak:
         self.model = loaded_model
         self.scaler = loaded_scaler
 
-    def predict_dipole(self):   
-        feats = self.get_features(self.centroids)
+    def predict_dipole(self, messages = True):   
+        mask = self.make_mask(self.centroids)
+        feats = self.extract_features(mask, self.centroids)
         X = self.scaler.transform(feats)
 
-        print("Making predictions..")
+        if messages:
+            print("Making predictions..")
         preds = self.model.predict(X)
 
         preds = preds.reshape(-1, 1)
@@ -56,19 +57,19 @@ class SymBreak:
         res_df.to_csv(pth, index=False) 
         return res_df
 
-    def get_features(self, centroids):
-            mask = self.make_mask(centroids)
-
+    def extract_features(self, mask, centroids, messages = True):
             # make mask for pattern
-            print("Generating mask..")
+            if messages:
+                print("\nGenerating mask..")
             im = self.make_pattern(mask, centroids).astype(np.uint8)
 
             if self.save_plots:
-                save_im = Image.fromarray(im)
+                plt.imshow(im)
                 pth = os.path.join(self.save_path, "organoid_coordinates.jpeg")
-                save_im.save(pth)            
+                plt.savefig(pth)            
 
-            print("Computing features..This step is slow, please wait")
+            if messages:
+                print("Computing features..This step is slow, please wait")
             # Gaussian blur
             im_blurs = []
             sigmas = [200, 700]
@@ -118,6 +119,7 @@ class SymBreak:
         mask = self.make_mask(centroids)
         im_pred = self.make_pattern(mask, centroids, preds = preds)
         plt.imshow(im_pred)
+        plt.colorbar()
         #save_im = Image.fromarray(im_pred)
         pth = os.path.join(self.save_path, "organoid_dipole_predictions.jpeg")
         plt.savefig(pth) 
@@ -166,5 +168,3 @@ class SymBreak:
     # anneal
         # save coords/annealed points 
         # save plot of coords and annealed coords
-
-    
