@@ -280,7 +280,7 @@ if __name__ == '__main__':
     cp.cuda.Device(int(sys.argv[1])).use()
 
     # load model and scaler
-    combined_df = pd.read_csv("datasets/round_1/combined/circle_combined_df.csv")
+    combined_df = pd.read_csv("data/combined_experiments_df.csv")
     feats_df = combined_df[['grad200','density700']]
     scaler = MinMaxScaler()
     X = scaler.fit_transform(feats_df.values)

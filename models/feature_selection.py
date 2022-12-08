@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from tqdm import tqdm
 
-df = pd.read_csv("circle_combined_df_big.csv")
+df = pd.read_csv("data/combined_experiments_df.csv")
 
 X = df.iloc[:, 5:-1]
 y = df.iloc[:, -1]
