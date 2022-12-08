@@ -1,4 +1,4 @@
-from symbreak import SymBreak
+from pipeline.symbreak import SymBreak
 
 pipeline = SymBreak(
     data_path = "data/smaller_example_coords.csv",
