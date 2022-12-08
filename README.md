@@ -1,8 +1,6 @@
-# SymBreak
+# Controlling organoid symmetry breaking uncovers an excitable system underlying human axial elongation
 
-## Controlling organoid symmetry breaking uncovers an excitable system underlying human axial elongation
-
-#### Quick Links
+## Quick Links
 - Paper: Anand et. al. 2020
 
 ## Usage
