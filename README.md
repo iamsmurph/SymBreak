@@ -1,4 +1,4 @@
-# CellSym
+# SymBreak
 
 ### TO DO
 - Fill out TO DO section with
