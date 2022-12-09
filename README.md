@@ -3,9 +3,15 @@
 ## Quick Links
 - Paper: Anand et. al. 2020
 
-## Usage
+## Installation and Usage
 
-After cloning, users can predict dipoles of a particular spatial configuration of organoids according to the code below. Input file should be a headless .csv format containing the centroid coordinates of organoids. 
+After cloning, users are recommended to install requirements in a Conda environment. Access to a GPU and CUDA Toolkit 11.2 or higher is required. 
+
+```
+conda create --name <env> --file requirements.txt
+```
+
+Users may predict dipoles of a particular spatial configuration of organoids according to the code below. The input file should be a headless .csv containing the centroid coordinates of organoids. 
 
 ```
 from pipeline.symbreak import SymBreak
@@ -19,7 +25,7 @@ pipeline = SymBreak(
 results_df = pipeline.predict_dipole()
 ```
 
-Users may also optimize the spatial patterning of organoids by simulated annealing. In this example, coordinates are sampled.
+Users may also optimize the spatial patterning of organoids by simulated annealing. In this example, coordinates are sampled. The user's own coordinates may also be inputted during class initialization. 
 ```
 from pipeline.symbreakanneal import SymBreakAnneal
 
