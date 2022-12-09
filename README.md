@@ -1,7 +1,7 @@
 # Controlling organoid symmetry breaking uncovers an excitable system underlying human axial elongation
 
 ## Quick Links
-- Paper: Anand et. al. 2020
+- Paper: Anand et. al. 2022
 
 ## Installation and Usage
 
