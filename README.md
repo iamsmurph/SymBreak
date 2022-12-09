@@ -11,7 +11,7 @@ After cloning, users are recommended to install requirements in a Conda environm
 conda create --name <env> --file requirements.txt
 ```
 
-Users may predict dipoles of a particular spatial configuration of organoids according to the code below. The input file should be a .csv without a header containing the centroid coordinates of organoids. 
+Users may predict dipoles of a particular spatial configuration of organoids according to the code below. The input should be a .csv file without a header containing the centroid coordinates of organoids. 
 
 ```
 from pipeline.symbreak import SymBreak
