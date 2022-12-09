@@ -2,10 +2,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from scipy import ndimage
+from cupyx.scipy import ndimage
+import cupy as cp
 import pickle
 import os
-from PIL import Image
 import sklearn
 
 class SymBreak:
@@ -29,8 +29,9 @@ class SymBreak:
         loaded_model = pickle.load(open(self.model_path, 'rb'))
         loaded_scaler = pickle.load(open(self.scaler_path,'rb'))
 
-        centroids = pd.read_csv(self.data_path, header=None).values.astype(int)
-        self.centroids = self.shift(centroids)
+        if data_path:
+            centroids = pd.read_csv(self.data_path, header=None).values.astype(int)
+            self.centroids = self.shift(centroids)
 
         self.model = loaded_model
         self.scaler = loaded_scaler
@@ -73,10 +74,14 @@ class SymBreak:
             # Gaussian blur
             im_blurs = []
             sigmas = [200, 700]
-            for sigma in tqdm(sigmas):
-                blur = ndimage.gaussian_filter(im, sigma=sigma) #, mode="constant"
+            im = cp.array(im)
+            #im = cp.array(im)
+            for sigma in sigmas:
+                blur = ndimage.gaussian_filter(im, sigma=sigma).get() #, mode="constant"
                 im_blurs.append(blur)
-        
+
+            im = im.get()
+
             # get features of organoids
             grad_rho200 = self.compute_feats(im, im_blurs[0], centroids, rho = False)
             rho700 = self.compute_feats(im, im_blurs[1], centroids, grad_rho = False)
@@ -131,7 +136,7 @@ class SymBreak:
         return mask
 
     def shift(self, centroids):
-        cmin, cmax = np.min(centroids), np.max(centroids)
+        cmin = np.min(centroids)
         diff = max(0, self.pad - cmin)
         centroids += diff
         return centroids
