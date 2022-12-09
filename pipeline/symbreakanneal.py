@@ -2,10 +2,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from scipy import ndimage
 import pickle
 import os
-from PIL import Image
 import sklearn
 from pipeline.symbreak import SymBreak
 
@@ -18,17 +16,17 @@ class SymBreakAnneal(SymBreak):
         org_rad = 75,
         org_pad = 25,
         snapshot_step = 100,
-        min_dist = 75 + 10,
+        min_dist = 75 + 5,
         c_to_c_dist = 2*75+2*1,
         objective = "min",
         lmbda = None,
         # seq gen configs
         n_init_orgs = 1, 
         n_total_orgs = 6,
-        n_search = 3,
+        n_search = 2, # 10
         sample_mask_size = 2000, 
         # sim anneal configs
-        niter = 2000,
+        niter = 5, # 2000
         move_len = 80,
         move_decay = .9991,
         random_perturb = 1/5,
@@ -80,6 +78,7 @@ class SymBreakAnneal(SymBreak):
         self.centroids = self.shift(centroids)
 
     def sim_anneal(self, im, centroids):
+        print("Annealing...")
         #print("Starting simulated annealing...")
         log = []
 
@@ -103,6 +102,12 @@ class SymBreakAnneal(SymBreak):
             if i % self.snapshot_step == 0:
                 name = "anneal_step_%d" % i
                 #wandb.log({name: wandb.Image(im.astype(np.uint8))})
+
+        if self.save_plots:
+            plt.imshow(im)
+            pth = os.path.join(self.save_path, "annealed_pattern.jpeg")
+            plt.savefig(pth)
+
         return im, centroids, log
 
     def candidate(self, image, centers, ix):
@@ -212,8 +217,8 @@ class SymBreakAnneal(SymBreak):
             return np.mean(preds) + lmbda*np.min(preds)
         
 
-    def sample_pattern(self, save_samples=False):
-        print("Sampling a pattern...")
+    def sample_pattern(self, ):
+        print("Sampling...")
         # create empty pattern
         mask = np.zeros((self.sample_mask_size, self.sample_mask_size))
         centroids = []
@@ -246,35 +251,19 @@ class SymBreakAnneal(SymBreak):
             centroids.append((newx, newy))
 
         # add the pad at the end
-        xmin, xmax = np.min(centroids[:, 0]), np.max(centroids[:, 0])
-        x_mean = (xmax-xmin)//2
-        ymin, ymax = np.min(centroids[:, 1]), np.max(centroids[:, 1])
-        y_mean = (ymax-ymin)//2
 
-        im_mean = self.sample_mask_size//2
-        x_shift = im_mean - x_mean
-        y_shift = im_mean - y_mean
-
-        gen_centroids = np.array(centroids) - np.array([x_shift, y_shift])
-        if self.save_plots:
-            plt.scatter(gen_centroids[:, 0], gen_centroids[:, 1])
-            pth = os.path.join(self.save_path, "sampled_scatter.jpeg")
-            plt.savefig(pth) 
+        
+        centroids = np.array(centroids)
 
         gen_pattern = np.pad(mask, self.pad)
-        #gen_centroids = np.array(centroids) + self.pad
+        gen_centroids = self.shift(centroids)
 
         if self.save_plots:
             plt.imshow(gen_pattern)
             pth = os.path.join(self.save_path, "sampled_pattern.jpeg")
-            plt.savefig(pth) 
+            plt.savefig(pth)
 
-        if save_samples:
-            gen_centroids
-
-
-
-        return gen_centroids
+        return gen_pattern, gen_centroids
 
     def random_location(self, image):
         found_valid = False

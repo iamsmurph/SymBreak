@@ -2,10 +2,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from scipy import ndimage
+from cupyx.scipy import ndimage
+import cupy as cp
 import pickle
 import os
-from PIL import Image
 import sklearn
 
 class SymBreak:
@@ -73,10 +73,14 @@ class SymBreak:
             # Gaussian blur
             im_blurs = []
             sigmas = [200, 700]
+            im = cp.array(im)
+            #im = cp.array(im)
             for sigma in tqdm(sigmas):
-                blur = ndimage.gaussian_filter(im, sigma=sigma) #, mode="constant"
+                blur = ndimage.gaussian_filter(im, sigma=sigma).get() #, mode="constant"
                 im_blurs.append(blur)
-        
+
+            im = im.get()
+
             # get features of organoids
             grad_rho200 = self.compute_feats(im, im_blurs[0], centroids, rho = False)
             rho700 = self.compute_feats(im, im_blurs[1], centroids, grad_rho = False)
