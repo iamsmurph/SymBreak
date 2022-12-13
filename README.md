@@ -11,7 +11,7 @@ After cloning, users are recommended to install requirements in a Conda environm
 conda create --name <env> --file requirements.txt
 ```
 
-The dipoles of a particular spatial configuration of organoids can be predicted according to the code below. The input should be a .csv file without a header containing the centroid coordinates of organoids. 
+The polarization of a particular spatial arrangement of organoids can be predicted according to the code below. The input should be a .csv file without a header containing the centroid coordinates of organoids. 
 
 ```
 from pipeline.symbreak import SymBreak
@@ -25,7 +25,7 @@ pipeline = SymBreak(
 results_df = pipeline.predict_dipole()
 ```
 
-Below, the spatial patterning of organoids can be optimized by simulated annealing to maximize minimum dipole. In this example, centroid coordinates are sampled. The user's own coordinates may also be inputted during class initialization. 
+Below, the spatial arrangement of organoids can be optimized by simulated annealing to maximize minimum predicted polarization. In this example, centroid coordinates are sampled. The user's own coordinates may also be inputted during class initialization. 
 ```
 from pipeline.symbreakanneal import SymBreakAnneal
 
