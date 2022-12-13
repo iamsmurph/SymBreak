@@ -7,9 +7,14 @@
 
 After cloning, users are recommended to install requirements in a Conda environment. Access to a Nvidia GPU and CUDA Toolkit 11.2 or higher is required. 
 
-```
-conda create --name <env> --file requirements.txt
-```
+#### Requirements:
+- cupy-cuda11x
+- matplotlib
+- numpy
+- pandas
+- scikit-learn
+- seaborn
+- tqdm
 
 The polarization of a particular spatial arrangement of organoids can be predicted according to the code below. The input should be a .csv file without a header containing the centroid coordinates of organoids. 
 
