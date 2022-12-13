@@ -5,7 +5,7 @@
 
 ## Installation and Usage
 
-After cloning, users are recommended to install requirements in a Conda environment. Access to a GPU and CUDA Toolkit 11.2 or higher is required. 
+After cloning, users are recommended to install requirements in a Conda environment. Access to a Nvidia GPU and CUDA Toolkit 11.2 or higher is required. 
 
 ```
 conda create --name <env> --file requirements.txt
